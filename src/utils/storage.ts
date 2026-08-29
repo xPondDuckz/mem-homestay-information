@@ -88,7 +88,13 @@ export const loadBookingsFromStorage = (): BookingRecord[] => {
       saveBookingsToStorage(INITIAL_SAMPLE_BOOKINGS);
       return INITIAL_SAMPLE_BOOKINGS;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      // Filter out any blank or corrupted items
+      const valid = parsed.filter((b: any) => b && (b.customerName?.trim() || b.id?.trim()));
+      return valid.length > 0 ? valid : INITIAL_SAMPLE_BOOKINGS;
+    }
+    return INITIAL_SAMPLE_BOOKINGS;
   } catch (error) {
     console.error('Error loading bookings from localStorage:', error);
     return INITIAL_SAMPLE_BOOKINGS;

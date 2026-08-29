@@ -44,6 +44,8 @@ export const App: React.FC = () => {
   // Google Sheets state
   const [sheetsUrl, setSheetsUrl] = useState<string>(() => getGoogleSheetsUrl());
   const [isCloudOnlyState, setIsCloudOnlyState] = useState<boolean>(() => getIsCloudOnly());
+  // ป้องกันการ sync ก่อนที่จะโหลดข้อมูลจาก Google Sheets เสร็จ
+  const [isSheetsReady, setIsSheetsReady] = useState<boolean>(() => !getGoogleSheetsUrl());
 
   // Confirm Modal state
   const [confirmState, setConfirmState] = useState<{
@@ -83,20 +85,31 @@ export const App: React.FC = () => {
   // Initial load from Google Sheets if URL exists
   useEffect(() => {
     if (sheetsUrl) {
+      // isSheetsReady = false เพื่อหยุด auto-sync ระหว่างโหลด
+      setIsSheetsReady(false);
       fetchFromGoogleSheets(sheetsUrl)
         .then((remoteBookings) => {
-          if (remoteBookings && remoteBookings.length >= 0) {
-            setBookings(remoteBookings);
-          }
+          // กรองแถวว่างออกก่อนอัปเดต state
+          const valid = remoteBookings.filter(
+            (b) => b && (String(b.customerName || '').trim() !== '' || String(b.id || '').trim() !== '')
+          );
+          setBookings(valid);
         })
         .catch((err) => {
           console.warn('Failed to auto-fetch from Google Sheets:', err);
+        })
+        .finally(() => {
+          // อนุญาตให้ auto-sync ทำงานได้หลังจากโหลดเสร็จแล้ว
+          setIsSheetsReady(true);
         });
     }
   }, [sheetsUrl]);
 
-  // Auto-sync or save bookings when state changes
+  // Auto-sync หรือบันทึก bookings เมื่อ state เปลี่ยน
+  // จะทำงานก็ต่อเมื่อ isSheetsReady = true เท่านั้น (ป้องกัน race condition)
   useEffect(() => {
+    if (!isSheetsReady) return;
+
     if (isCloudOnlyState) {
       clearLocalStorageBookings();
     } else {
@@ -108,7 +121,7 @@ export const App: React.FC = () => {
         console.warn('Failed auto-syncing to Google Sheets:', err);
       });
     }
-  }, [bookings, sheetsUrl, isCloudOnlyState]);
+  }, [bookings, sheetsUrl, isCloudOnlyState, isSheetsReady]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
