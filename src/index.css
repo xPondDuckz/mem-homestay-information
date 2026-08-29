@@ -1,0 +1,291 @@
+@import "tailwindcss";
+
+:root, html {
+  color-scheme: light !important;
+}
+
+/* ============================================================
+   GLOBAL TYPOGRAPHY — Sarabun (TH) + Inter (EN)
+   ============================================================ */
+@layer base {
+  body {
+    background-color: #f8fafc;
+    color: #0f172a;
+    font-family: 'Sarabun', 'Inter', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    color-scheme: light !important;
+  }
+}
+
+/* ============================================================
+   CARD & INPUT — Light Only & High Contrast
+   ============================================================ */
+.glass-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 12px -2px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
+}
+
+.glass-card-hover:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 12px 28px -4px rgba(245, 158, 11, 0.18);
+  transform: translateY(-2px);
+}
+
+.glass-input {
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  color: #0f172a !important;
+  font-family: 'Sarabun', 'Inter', system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.glass-input::placeholder {
+  color: #64748b !important;
+  font-weight: 400;
+}
+
+.glass-input:focus {
+  outline: none;
+  border-color: #d97706;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+  background: #fffbeb;
+}
+
+
+/* ============================================================
+   TABLE ROW STATUS COLORS + HOVER TRANSITION
+   ============================================================ */
+.row-confirmed   { background-color: #ffffff; transition: background-color 0.15s ease; }
+.row-confirmed:hover   { background-color: #fffbeb; }
+
+.row-checked_in  { background-color: #eff6ff; transition: background-color 0.15s ease; }
+.row-checked_in:hover  { background-color: #dbeafe; }
+
+.row-checked_out { background-color: #f8fafc; transition: background-color 0.15s ease; }
+.row-checked_out:hover { background-color: #f1f5f9; }
+
+.row-cancelled   { background-color: #fff1f2; transition: background-color 0.15s ease; }
+.row-cancelled:hover   { background-color: #ffe4e6; }
+
+/* ============================================================
+   MOBILE CARD STATUS LEFT BORDER
+   ============================================================ */
+.card-confirmed   { border-left-color: #22c55e; }
+.card-checked_in  { border-left-color: #3b82f6; }
+.card-checked_out { border-left-color: #94a3b8; }
+.card-cancelled   { border-left-color: #f43f5e; }
+
+/* ============================================================
+   FAB — Float + Pulse Ring
+   ============================================================ */
+.fab-btn {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 40;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #f59e0b;
+  color: #0f172a;
+  box-shadow: 0 6px 24px rgba(245, 158, 11, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  animation: fabPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards, fabFloat 3s ease-in-out 0.4s infinite;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.fab-btn::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid rgba(245, 158, 11, 0.4);
+  animation: fabRing 2s ease-out 1s infinite;
+}
+.fab-btn:hover {
+  background: #d97706;
+  box-shadow: 0 10px 32px rgba(245, 158, 11, 0.6);
+  animation: none;
+  transform: scale(1.1);
+}
+.fab-btn:active {
+  transform: scale(0.94);
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ============================================================
+   KEYFRAMES
+   ============================================================ */
+
+/* Page load — fade + lift */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Modal slide up from bottom */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Stats cards: scale pop in */
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.92) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Booking rows/cards: slide from left */
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* FAB: initial pop */
+@keyframes fabPop {
+  0%   { transform: scale(0.3); opacity: 0; }
+  70%  { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* FAB: gentle float bob */
+@keyframes fabFloat {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-5px); }
+}
+
+/* FAB: expanding ring */
+@keyframes fabRing {
+  0%   { transform: scale(1);    opacity: 0.7; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+
+/* Shimmer highlight sweep */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+
+/* Number count-up pulse */
+@keyframes numPop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.08); color: #d97706; }
+  100% { transform: scale(1); }
+}
+
+/* Skeleton loading */
+@keyframes skeleton {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+/* Badge gentle pulse */
+@keyframes badgePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+  50%       { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);  }
+}
+
+/* Navbar logo wiggle on load */
+@keyframes logoWiggle {
+  0%, 100% { transform: rotate(0deg); }
+  20%       { transform: rotate(-8deg); }
+  40%       { transform: rotate(6deg); }
+  60%       { transform: rotate(-4deg); }
+  80%       { transform: rotate(2deg); }
+}
+
+/* ============================================================
+   ANIMATION UTILITY CLASSES
+   ============================================================ */
+.animate-fade-in    { animation: fadeIn    0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-slide-up   { animation: slideUp   0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-scale-in   { animation: scaleIn   0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-slide-left { animation: slideInLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-fab-pop    { animation: fabPop    0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+                                 fabFloat  3s ease-in-out 0.4s infinite; }
+.animate-num-pop    { animation: numPop    0.5s ease-out both; }
+.animate-logo       { animation: logoWiggle 0.6s ease-out 0.2s both; }
+.animate-badge-pulse{ animation: badgePulse 2s ease-in-out infinite; }
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.7) 50%, transparent 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+/* ============================================================
+   STAGGER DELAY UTILITIES
+   ============================================================ */
+.delay-0   { animation-delay: 0ms; }
+.delay-75  { animation-delay: 75ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-225 { animation-delay: 225ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-375 { animation-delay: 375ms; }
+.delay-450 { animation-delay: 450ms; }
+.delay-600 { animation-delay: 600ms; }
+
+/* Keep invisible until animation starts */
+.animate-scale-in,
+.animate-fade-in,
+.animate-slide-left,
+.animate-slide-up {
+  opacity: 0;
+  animation-fill-mode: both;
+}
+
+/* ============================================================
+   PRINT — Receipt A4 Single Page
+   ============================================================ */
+@media print {
+  /* When receipt modal is open: hide entire app, show only receipt */
+  body.print-receipt-mode > *:not(.receipt-print-portal) {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  body.print-receipt-mode .receipt-print-portal {
+    display: block !important;
+    visibility: visible !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: auto !important;
+    background: #ffffff !important;
+    z-index: 99999 !important;
+  }
+  body.print-receipt-mode .receipt-modal-overlay {
+    position: static !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+  }
+  body.print-receipt-mode .receipt-modal-wrapper {
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+}
