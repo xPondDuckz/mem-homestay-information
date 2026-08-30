@@ -151,6 +151,8 @@ export async function fetchFromGoogleSheets(url: string): Promise<BookingRecord[
     throw new Error('Invalid format returned from Google Sheets');
   }
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+
   return data
     .filter((item: any) => item && (String(item.customerName || '').trim() !== '' || String(item.id || '').trim() !== ''))
     .map((item: any) => {
@@ -159,16 +161,25 @@ export async function fetchFromGoogleSheets(url: string): Promise<BookingRecord[
         phone = '0' + phone;
       }
 
+      const cleanCreated = cleanDateStr(item.createdAt);
+      const cleanCheckIn = cleanDateStr(item.checkInDate);
+      const cleanCheckOut = cleanDateStr(item.checkOutDate);
+
+      // Fallback empty dates to today's date so legacy corrupted rows appear in table and can be deleted
+      const validCheckIn = (cleanCheckIn && cleanCheckIn.length >= 7) ? cleanCheckIn : (cleanCreated && cleanCreated.length >= 7 ? cleanCreated : todayStr);
+      const validCreated = (cleanCreated && cleanCreated.length >= 7) ? cleanCreated : validCheckIn;
+      const validCheckOut = (cleanCheckOut && cleanCheckOut.length >= 7) ? cleanCheckOut : validCheckIn;
+
       return {
         id: String(item.id || '').replace(/^'/, '').trim(),
-        createdAt: cleanDateStr(item.createdAt),
+        createdAt: validCreated,
         customerName: String(item.customerName || '').trim(),
         phoneNumber: phone,
         bedType: item.bedType || 'big',
         bookingChannel: item.bookingChannel || 'walk_in',
-        checkInDate: cleanDateStr(item.checkInDate),
+        checkInDate: validCheckIn,
         checkInTime: cleanTimeStr(item.checkInTime),
-        checkOutDate: cleanDateStr(item.checkOutDate),
+        checkOutDate: validCheckOut,
         checkOutTime: cleanTimeStr(item.checkOutTime),
         price: Number(item.price) || 0,
         notes: String(item.notes || '').trim(),
