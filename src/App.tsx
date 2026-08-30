@@ -20,6 +20,7 @@ import { BookingFormModal } from './components/BookingFormModal';
 import { ExportImportModal } from './components/ExportImportModal';
 import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import { BookingReceiptModal } from './components/BookingReceiptModal';
+import { OfficialTaxInvoiceModal } from './components/OfficialTaxInvoiceModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { CalendarView } from './components/CalendarView';
 import { AnalyticsView } from './components/AnalyticsView';
@@ -33,6 +34,8 @@ export const App: React.FC = () => {
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
   const [receiptBooking, setReceiptBooking] = useState<BookingRecord | null>(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [taxInvoiceBooking, setTaxInvoiceBooking] = useState<BookingRecord | null>(null);
+  const [isTaxInvoiceModalOpen, setIsTaxInvoiceModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // View state: 'table' | 'calendar' | 'analytics'
@@ -72,10 +75,10 @@ export const App: React.FC = () => {
 
   const t = translations[lang];
 
-  // Force light theme always — remove any saved dark theme
+  // Force light theme always
   useEffect(() => {
     document.documentElement.className = 'light';
-    localStorage.removeItem('mem_homestay_theme');
+    document.documentElement.style.colorScheme = 'light';
   }, []);
 
   useEffect(() => {
@@ -234,6 +237,45 @@ export const App: React.FC = () => {
     setEditingBooking(null);
   };
 
+  const handleQuickUpdateStatus = (id: string, newStatus: BookingRecord['status']) => {
+    const target = bookings.find((b) => b.id === id);
+    if (!target) return;
+    const updated = { ...target, status: newStatus };
+    setBookings((prev) => prev.map((b) => (b.id === id ? updated : b)));
+
+    const statusMapText: Record<string, string> = {
+      checked_in: `✅ เช็คอิน ${target.customerName} เรียบร้อยแล้ว`,
+      checked_out: `🚪 เช็คเอาท์ ${target.customerName} เรียบร้อยแล้ว`,
+      confirmed: `📋 เปลี่ยนสถานะเป็นรอเช็คอิน (${target.customerName})`,
+      cancelled: `❌ ยกเลิกการจองของ ${target.customerName}`,
+    };
+    showToast(statusMapText[newStatus] || 'อัปเดตสถานะเรียบร้อย');
+  };
+
+  const handleTodayFilter = (type: 'check_in' | 'check_out') => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    setCurrentView('table');
+    if (type === 'check_in') {
+      setFilterOptions((prev) => ({
+        ...prev,
+        startDate: todayStr,
+        endDate: todayStr,
+        status: 'confirmed',
+        searchQuery: '',
+      }));
+      showToast('🔍 แสดงเฉพาะรายการที่ต้อง Check-in วันนี้');
+    } else {
+      setFilterOptions((prev) => ({
+        ...prev,
+        startDate: todayStr,
+        endDate: todayStr,
+        status: 'checked_in',
+        searchQuery: '',
+      }));
+      showToast('🔍 แสดงเฉพาะรายการที่ต้อง Check-out วันนี้');
+    }
+  };
+
   const handleDeleteBooking = (id: string) => {
     const target = bookings.find((b) => b.id === id);
     openConfirm({
@@ -280,6 +322,24 @@ export const App: React.FC = () => {
     setIsReceiptModalOpen(true);
   };
 
+  const handlePrintTaxInvoice = (booking: BookingRecord) => {
+    setTaxInvoiceBooking(booking);
+    setIsTaxInvoiceModalOpen(true);
+  };
+
+  const handleSaveTaxDetails = (updatedBooking: BookingRecord) => {
+    setBookings((prev) => {
+      const idx = prev.findIndex((b) => b.id === updatedBooking.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = updatedBooking;
+        return copy;
+      }
+      return prev;
+    });
+    showToast('💾 บันทึกข้อมูลใบกำกับภาษีเรียบร้อย');
+  };
+
   const handleAddBookingForDate = (dateStr: string) => {
     setEditingBooking({
       id: `MEM-${Date.now().toString().slice(-6)}`,
@@ -299,17 +359,28 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-900 transition-colors duration-300">
+    <div
+      className="min-h-screen flex flex-col transition-colors duration-300"
+      style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}
+    >
 
       {/* ── Toast Notification ── */}
       {toastMessage && (
-        <div className="fixed bottom-24 right-4 sm:bottom-6 sm:right-6 z-50 bg-slate-800 text-white font-semibold px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-2.5 animate-fade-in text-sm max-w-xs">
-          <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
+        <div
+          className="fixed bottom-24 right-4 sm:bottom-6 sm:right-6 z-50 font-semibold px-5 py-3.5 rounded-2xl flex items-center gap-2.5 animate-fade-in text-sm max-w-xs"
+          style={{
+            background: '#ffffff',
+            border: '1px solid var(--border-light)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 1px 0 var(--border-light)',
+            color: 'var(--text-primary)',
+          }}
+        >
+          <CheckCircle2 className="w-5 h-5 shrink-0" style={{ color: 'var(--green)' }} />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* ── Navbar (includes Today Summary Row & Google Sheets Btn) ── */}
+      {/* ── Navbar ── */}
       <Navbar
         onOpenAddModal={openAddModal}
         onOpenExportModal={() => setIsExportModalOpen(true)}
@@ -322,51 +393,41 @@ export const App: React.FC = () => {
         todayCheckIns={stats.todayCheckIns}
         todayCheckOuts={stats.todayCheckOuts}
         totalRevenue={stats.totalRevenue}
+        onTodayCheckInClick={() => handleTodayFilter('check_in')}
+        onTodayCheckOutClick={() => handleTodayFilter('check_out')}
       />
 
       {/* ── Main Content ── */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-5 space-y-5">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6 space-y-6">
 
         {/* Stats Cards */}
         <StatsOverview stats={stats} t={t} />
 
         {/* ── VIEW SWITCHER TABS ── */}
-        <div className="flex items-center justify-between gap-3 bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
-          <div className="flex items-center gap-1 min-w-max">
+        <div className="view-tab-bar flex items-center justify-between gap-3 overflow-x-auto">
+          <div className="flex items-center gap-1.5 min-w-max">
             <button
               onClick={() => setCurrentView('table')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all ${
-                currentView === 'table'
-                  ? 'bg-slate-900 text-amber-400 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
+              className={`view-tab ${currentView === 'table' ? 'active' : ''}`}
             >
               <Table className="w-4 h-4" />
-              📋 รายการลูกค้า (Table View)
+              📋 รายการลูกค้า
             </button>
 
             <button
               onClick={() => setCurrentView('calendar')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all ${
-                currentView === 'calendar'
-                  ? 'bg-slate-900 text-amber-400 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
+              className={`view-tab ${currentView === 'calendar' ? 'active' : ''}`}
             >
               <CalendarIcon className="w-4 h-4" />
-              🗓️ ปฏิทินจอง (Calendar View)
+              🗓️ ปฏิทินจอง
             </button>
 
             <button
               onClick={() => setCurrentView('analytics')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all ${
-                currentView === 'analytics'
-                  ? 'bg-slate-900 text-amber-400 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
+              className={`view-tab ${currentView === 'analytics' ? 'active' : ''}`}
             >
               <BarChart3 className="w-4 h-4" />
-              📊 กราฟสรุปรายได้ (Analytics)
+              📊 Analytics
             </button>
           </div>
 
@@ -374,7 +435,7 @@ export const App: React.FC = () => {
           <button
             id="add-booking-desktop-btn"
             onClick={openAddModal}
-            className="hidden sm:flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black px-4 py-2 rounded-xl text-xs shadow-sm active:scale-95 transition-all shrink-0"
+            className="hidden sm:flex items-center gap-2 btn-primary px-5 py-2.5 rounded-xl text-sm font-black active:scale-95 transition-all shrink-0"
           >
             <PlusCircle className="w-4 h-4" />
             {t.addBookingBtn}
@@ -383,11 +444,18 @@ export const App: React.FC = () => {
 
         {/* ── CONDITIONAL VIEW RENDER ── */}
         {currentView === 'table' && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="flex items-center justify-between px-1">
-              <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+              <h2 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
                 {t.filteredRecordsCount}
-                <span className="text-xs text-amber-900 bg-amber-100 border border-amber-300 px-3 py-0.5 rounded-full font-extrabold shadow-sm">
+                <span
+                  className="text-xs px-2.5 py-0.5 rounded-full font-bold"
+                  style={{
+                    background: 'var(--brand-light)',
+                    border: '1px solid #c5d0fa',
+                    color: 'var(--brand)',
+                  }}
+                >
                   {filteredBookings.length} {t.recordsUnit}
                 </span>
               </h2>
@@ -399,7 +467,9 @@ export const App: React.FC = () => {
               onFilterChange={(f) => setFilterOptions((prev) => ({ ...prev, ...f }))}
               onEdit={(b) => { setEditingBooking(b); setIsAddModalOpen(true); }}
               onDelete={handleDeleteBooking}
+              onQuickUpdateStatus={handleQuickUpdateStatus}
               onPrintReceipt={handlePrintReceipt}
+              onPrintTaxInvoice={handlePrintTaxInvoice}
               onResetFilters={handleResetFilters}
               selectedMonth={selectedMonth}
               onMonthChange={setSelectedMonth}
@@ -437,16 +507,22 @@ export const App: React.FC = () => {
       </main>
 
       {/* ── Footer ── */}
-      <footer className="mt-8 border-t border-slate-200 dark:border-slate-800 py-4 bg-white dark:bg-slate-900">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
+      <footer className="site-footer mt-8 py-4">
+        <div
+          className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs font-medium"
+          style={{ color: 'var(--text-muted)' }}
+        >
           <p>{t.footerCopyright}</p>
           <p>
-            {isCloudOnlyState || sheetsUrl ? `☁️ ${t.footerStorageCloud}` : `💾 ${t.footerStorage}`}
+            {isCloudOnlyState || sheetsUrl
+              ? `☁️ ${t.footerStorageCloud}`
+              : `💾 ${t.footerStorage}`
+            }
           </p>
         </div>
       </footer>
 
-      {/* ── FAB (Floating Add Button) — Mobile Only ── */}
+      {/* ── FAB — Mobile Only ── */}
       <button
         id="fab-add-btn"
         onClick={openAddModal}
@@ -454,7 +530,7 @@ export const App: React.FC = () => {
         title={t.fabTooltip}
         aria-label={t.fabTooltip}
       >
-        <PlusCircle className="w-7 h-7 text-slate-950" />
+        <PlusCircle className="w-7 h-7" style={{ color: '#0f1117' }} />
       </button>
 
       {/* ── Modals ── */}
@@ -493,6 +569,13 @@ export const App: React.FC = () => {
         onClose={() => { setIsReceiptModalOpen(false); setReceiptBooking(null); }}
         booking={receiptBooking}
         t={t}
+      />
+
+      <OfficialTaxInvoiceModal
+        isOpen={isTaxInvoiceModalOpen}
+        onClose={() => { setIsTaxInvoiceModalOpen(false); setTaxInvoiceBooking(null); }}
+        booking={taxInvoiceBooking}
+        onSaveTaxDetails={handleSaveTaxDetails}
       />
 
       <ConfirmModal

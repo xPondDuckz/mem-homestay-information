@@ -3,126 +3,110 @@ import { Calendar, ChevronLeft, ChevronRight, RotateCcw, Eye } from 'lucide-reac
 import type { Language } from '../utils/translations';
 
 interface MonthSelectorProps {
-  selectedMonth: string; // 'YYYY-MM' or 'all'
+  selectedMonth: string;
   onMonthChange: (month: string) => void;
-  availableMonths: string[]; // ['2026-08', '2026-07', ...]
+  availableMonths: string[];
   t: any;
   lang: Language;
 }
 
 export const formatMonthYear = (monthStr: string, lang: Language): string => {
-  if (monthStr === 'all') {
-    return lang === 'th' ? 'ทุกเดือนสะสม (All Time)' : 'All Time Records';
-  }
-
+  if (monthStr === 'all') return lang === 'th' ? 'ทุกเดือนสะสม (All Time)' : 'All Time Records';
   const [yearStr, monthStrNum] = monthStr.split('-');
   const year = parseInt(yearStr, 10);
   const monthIdx = parseInt(monthStrNum, 10) - 1;
-
   const date = new Date(year, monthIdx, 1);
-
   if (lang === 'th') {
-    const monthNameTH = date.toLocaleDateString('th-TH', { month: 'long' });
-    const yearTH = year + 543;
-    return `${monthNameTH} ${yearTH}`;
-  } else {
-    const monthNameEN = date.toLocaleDateString('en-US', { month: 'long' });
-    return `${monthNameEN} ${year}`;
+    return `${date.toLocaleDateString('th-TH', { month: 'long' })} ${year + 543}`;
   }
+  return `${date.toLocaleDateString('en-US', { month: 'long' })} ${year}`;
 };
 
 export const MonthSelector: React.FC<MonthSelectorProps> = ({
-  selectedMonth,
-  onMonthChange,
-  availableMonths,
-  t,
-  lang,
+  selectedMonth, onMonthChange, availableMonths, t, lang,
 }) => {
-  const currentMonthStr = new Date().toISOString().slice(0, 7); // '2026-08'
-
-  // Ensure current month and surrounding months exist in list
+  const currentMonthStr = new Date().toISOString().slice(0, 7);
   const allMonthOptions = Array.from(new Set([...availableMonths, currentMonthStr])).sort().reverse();
 
   const handlePrev = () => {
-    if (selectedMonth === 'all') {
-      onMonthChange(allMonthOptions[0] || currentMonthStr);
-      return;
-    }
+    if (selectedMonth === 'all') { onMonthChange(allMonthOptions[0] || currentMonthStr); return; }
     const idx = allMonthOptions.indexOf(selectedMonth);
     if (idx < allMonthOptions.length - 1) {
       onMonthChange(allMonthOptions[idx + 1]);
     } else {
-      // Calculate previous month mathematically
       const [y, m] = selectedMonth.split('-').map(Number);
-      const prevDate = new Date(y, m - 2, 1);
-      const prevStr = prevDate.toISOString().slice(0, 7);
-      onMonthChange(prevStr);
+      onMonthChange(new Date(y, m - 2, 1).toISOString().slice(0, 7));
     }
   };
 
   const handleNext = () => {
     if (selectedMonth === 'all') return;
     const idx = allMonthOptions.indexOf(selectedMonth);
-    if (idx > 0) {
-      onMonthChange(allMonthOptions[idx - 1]);
-    } else {
-      // Calculate next month mathematically
+    if (idx > 0) onMonthChange(allMonthOptions[idx - 1]);
+    else {
       const [y, m] = selectedMonth.split('-').map(Number);
-      const nextDate = new Date(y, m, 1);
-      const nextStr = nextDate.toISOString().slice(0, 7);
-      onMonthChange(nextStr);
+      onMonthChange(new Date(y, m, 1).toISOString().slice(0, 7));
     }
   };
 
-  const isCurrentMonthSelected = selectedMonth === currentMonthStr;
+  const isCurrentMonth = selectedMonth === currentMonthStr;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-sm space-y-2.5">
-      {/* Month Active Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-amber-500/10 border border-amber-300/60 rounded-xl px-3.5 py-2">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-amber-500 text-slate-950 font-bold shrink-0">
-            <Eye className="w-4 h-4" />
+    <div className="card p-4 space-y-3">
+
+      {/* Active Month Banner */}
+      <div
+        className="flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-2.5"
+        style={{ background: 'var(--brand-light)', border: '1px solid #c5d0fa' }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            className="p-1.5 rounded-lg shrink-0"
+            style={{ background: 'var(--brand)' }}
+          >
+            <Eye className="w-3.5 h-3.5 text-white" />
           </div>
           <div>
-            <span className="text-[11px] text-amber-900 font-bold uppercase tracking-wider block">
-              {t.currentlyViewingMonthLabel || 'กำลังแสดงผลข้อมูลประจำเดือน:'}
+            <span className="text-[10px] font-black uppercase tracking-[0.12em] block" style={{ color: 'var(--brand)' }}>
+              {t.currentlyViewingMonthLabel || 'กำลังแสดงข้อมูล:'}
             </span>
-            <h3 className="text-sm font-extrabold text-slate-900 leading-tight">
+            <h3 className="text-sm font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>
               {formatMonthYear(selectedMonth, lang)}
             </h3>
           </div>
         </div>
 
-        {!isCurrentMonthSelected && (
+        {!isCurrentMonth && (
           <button
             onClick={() => onMonthChange(currentMonthStr)}
-            className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition active:scale-95 shrink-0"
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all active:scale-95 shrink-0"
+            style={{ background: 'var(--brand)', color: '#fff', boxShadow: '0 2px 8px rgba(59,91,219,0.25)' }}
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            {t.btnCurrentMonth || 'กลับสู่เดือนปัจจุบัน'}
+            {t.btnCurrentMonth || 'เดือนนี้'}
           </button>
         )}
       </div>
 
-      {/* Month Control Controls */}
-      <div className="flex items-center justify-between gap-2">
+      {/* Navigation */}
+      <div className="flex items-center gap-2">
         <button
           onClick={handlePrev}
-          className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 py-2 rounded-xl text-xs border border-slate-200 transition active:scale-95 shrink-0 min-h-[38px]"
-          title={t.btnPrevMonth || 'เดือนก่อนหน้า'}
+          className="flex items-center gap-1.5 font-semibold px-3 py-2 rounded-xl text-xs transition-all active:scale-95 shrink-0 min-h-[38px] btn-ghost"
         >
-          <ChevronLeft className="w-4 h-4 text-amber-600" />
-          <span className="hidden sm:inline">{t.btnPrevMonth || 'เดือนก่อนหน้า'}</span>
+          <ChevronLeft className="w-4 h-4" style={{ color: 'var(--brand)' }} />
+          <span className="hidden sm:inline">{t.btnPrevMonth || 'ก่อนหน้า'}</span>
         </button>
 
-        {/* Month Selector Dropdown */}
-        <div className="flex-1 max-w-xs relative flex items-center">
-          <Calendar className="w-4 h-4 text-amber-600 absolute left-3 pointer-events-none" />
+        <div className="flex-1 relative flex items-center">
+          <Calendar
+            className="w-4 h-4 absolute left-3 pointer-events-none"
+            style={{ color: 'var(--text-muted)' }}
+          />
           <select
             value={selectedMonth}
             onChange={(e) => onMonthChange(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-300 text-slate-900 font-extrabold pl-9 pr-8 py-2 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none cursor-pointer appearance-none min-h-[38px]"
+            className="w-full glass-input pl-9 pr-8 py-2 cursor-pointer appearance-none min-h-[38px] font-semibold text-xs"
           >
             <option value="all">🌐 {formatMonthYear('all', lang)}</option>
             {allMonthOptions.map((mStr) => (
@@ -131,16 +115,15 @@ export const MonthSelector: React.FC<MonthSelectorProps> = ({
               </option>
             ))}
           </select>
-          <div className="pointer-events-none absolute right-3 text-slate-500 text-xs">▼</div>
+          <div className="pointer-events-none absolute right-3 text-xs" style={{ color: 'var(--text-muted)' }}>▼</div>
         </div>
 
         <button
           onClick={handleNext}
-          className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 py-2 rounded-xl text-xs border border-slate-200 transition active:scale-95 shrink-0 min-h-[38px]"
-          title={t.btnNextMonth || 'เดือนถัดไป'}
+          className="flex items-center gap-1.5 font-semibold px-3 py-2 rounded-xl text-xs transition-all active:scale-95 shrink-0 min-h-[38px] btn-ghost"
         >
-          <span className="hidden sm:inline">{t.btnNextMonth || 'เดือนถัดไป'}</span>
-          <ChevronRight className="w-4 h-4 text-amber-600" />
+          <span className="hidden sm:inline">{t.btnNextMonth || 'ถัดไป'}</span>
+          <ChevronRight className="w-4 h-4" style={{ color: 'var(--brand)' }} />
         </button>
       </div>
     </div>

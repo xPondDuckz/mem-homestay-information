@@ -75,12 +75,12 @@ export const BookingReceiptModal: React.FC<BookingReceiptModalProps> = ({
         @media print {
           @page {
             size: A4 portrait;
-            margin: 0 !important;
+            margin: 0mm !important;
           }
           html, body {
             background: #ffffff !important;
-            margin: 0 !important;
-            padding: 0 !important;
+            margin: 0mm !important;
+            padding: 0mm !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
@@ -178,7 +178,10 @@ export const BookingReceiptModal: React.FC<BookingReceiptModalProps> = ({
                       เมม โฮมสเตย์&nbsp;
                       <span className="text-amber-600 font-bold text-lg">MEM HOMESTAY</span>
                     </h1>
-                    <p className="text-[11px] text-slate-500 font-bold mt-0.5">
+                    <p className="text-[11px] text-slate-600 font-bold mt-1">
+                      181 หมู่ 6 ตำบลชุมโค อำเภอปะทิว จังหวัดชุมพร 86160 · โทร. 087-8939131
+                    </p>
+                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">
                       ใบยืนยันการจองห้องพัก &amp; ใบเสร็จรับเงิน (BOOKING CONFIRMATION &amp; RECEIPT)
                     </p>
                   </div>

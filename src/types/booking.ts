@@ -4,6 +4,14 @@ export type BookingChannel = 'booking_com' | 'walk_in';
 
 export type BookingStatus = 'confirmed' | 'checked_in' | 'checked_out' | 'cancelled';
 
+export interface TaxInvoiceItem {
+  id: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+}
+
 export interface BookingRecord {
   id: string;
   createdAt: string; // ISO Date format YYYY-MM-DD
@@ -18,6 +26,18 @@ export interface BookingRecord {
   price: number;
   notes?: string;
   status: BookingStatus;
+
+  // Official Tax Invoice / Cash Sale fields
+  bookNo?: string;          // เล่มที่
+  billNo?: string;          // เลขที่
+  taxId?: string;           // เลขประจำตัวผู้เสียภาษีอากร 13 หลัก
+  personalId?: string;      // เลขประจำตัวประชาชน
+  customerAddress?: string; // ที่อยู่สำหรับออกบิล
+  companyName?: string;     // ชื่อบริษัท/หน่วยงานที่ขอเบิก
+  customItems?: TaxInvoiceItem[]; // รายการในบิล
+  vatRate?: number;         // ภาษีมูลค่าเพิ่ม (%) เช่น 0 หรือ 7
+  withholdingTaxRate?: number; // ภาษีหัก ณ ที่จ่าย (%) เช่น 0, 1, 3
+  collectorName?: string;   // ชื่อผู้รับเงิน
 }
 
 export interface BookingFilterOptions {

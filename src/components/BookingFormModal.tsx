@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { BookingRecord, BedType, BookingChannel, BookingStatus } from '../types/booking';
 import { generateBookingId } from '../utils/storage';
 import {
@@ -16,30 +16,34 @@ interface BookingFormModalProps {
   t: any;
 }
 
-const STATUS_OPTIONS: { value: BookingStatus; icon: React.ReactNode; colorClass: string; activeClass: string }[] = [
+const STATUS_OPTIONS: { value: BookingStatus; icon: React.ReactNode; colorClass: string; activeClass: string; activeStyle?: React.CSSProperties }[] = [
   {
     value: 'confirmed',
     icon: <CalendarCheck className="w-4 h-4" />,
-    colorClass: 'border-emerald-300 text-emerald-950 bg-emerald-50 hover:bg-emerald-100 font-bold',
-    activeClass: 'bg-emerald-600 text-white border-emerald-700 shadow-md ring-2 ring-emerald-300 font-black',
+    colorClass: '',
+    activeClass: '',
+    activeStyle: { background: 'var(--green-bg)', border: '1.5px solid var(--green)', color: '#087f5b', fontWeight: 700 },
   },
   {
     value: 'checked_in',
     icon: <CheckCircle2 className="w-4 h-4" />,
-    colorClass: 'border-blue-300 text-blue-950 bg-blue-50 hover:bg-blue-100 font-bold',
-    activeClass: 'bg-blue-600 text-white border-blue-700 shadow-md ring-2 ring-blue-300 font-black',
+    colorClass: '',
+    activeClass: '',
+    activeStyle: { background: 'var(--blue-bg)', border: '1.5px solid var(--blue)', color: '#1864ab', fontWeight: 700 },
   },
   {
     value: 'checked_out',
     icon: <LogOut className="w-4 h-4" />,
-    colorClass: 'border-slate-300 text-slate-900 bg-slate-100 hover:bg-slate-200 font-bold',
-    activeClass: 'bg-slate-700 text-white border-slate-800 shadow-md ring-2 ring-slate-400 font-black',
+    colorClass: '',
+    activeClass: '',
+    activeStyle: { background: '#f1f3f5', border: '1.5px solid #adb5bd', color: '#495057', fontWeight: 700 },
   },
   {
     value: 'cancelled',
     icon: <Ban className="w-4 h-4" />,
-    colorClass: 'border-rose-300 text-rose-950 bg-rose-50 hover:bg-rose-100 font-bold',
-    activeClass: 'bg-rose-600 text-white border-rose-700 shadow-md ring-2 ring-rose-300 font-black',
+    colorClass: '',
+    activeClass: '',
+    activeStyle: { background: 'var(--red-bg)', border: '1.5px solid var(--red)', color: '#c92a2a', fontWeight: 700 },
   },
 ];
 
@@ -95,12 +99,28 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
     setErrors({});
   }, [initialData, isOpen]);
 
+  const nights = useMemo(() => {
+    if (!formData.checkInDate || !formData.checkOutDate) return 1;
+    const dIn = new Date(formData.checkInDate);
+    const dOut = new Date(formData.checkOutDate);
+    const diffTime = dOut.getTime() - dIn.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays : 1;
+  }, [formData.checkInDate, formData.checkOutDate]);
+
   if (!isOpen) return null;
 
   const addNights = (numDays: number) => {
     const start = formData.checkInDate ? new Date(formData.checkInDate) : new Date();
     start.setDate(start.getDate() + numDays);
-    setFormData((prev) => ({ ...prev, checkOutDate: start.toISOString().split('T')[0] }));
+    const newOutDate = start.toISOString().split('T')[0];
+    const newNights = numDays;
+    const currentRate = (formData.price && nights > 0) ? Math.round(formData.price / nights) : 1500;
+    setFormData((prev) => ({
+      ...prev,
+      checkOutDate: newOutDate,
+      price: currentRate * newNights,
+    }));
   };
 
   const setToday = () => {
@@ -150,40 +170,54 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-950/70 backdrop-blur-md animate-fade-in">
-      {/* Modal Container */}
-      <div className="bg-white w-full sm:max-w-xl rounded-t-3xl sm:rounded-2xl border-t sm:border border-slate-200 shadow-2xl overflow-hidden max-h-[95dvh] flex flex-col animate-slide-up">
-
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-fade-in modal-overlay">
+      <div
+        className="w-full sm:max-w-xl rounded-t-3xl sm:rounded-2xl overflow-hidden max-h-[95dvh] flex flex-col animate-slide-up"
+        style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-light)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+        }}
+      >
         {/* Header Bar */}
-        <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+        <div
+          className="px-5 py-4 flex items-center justify-between shrink-0"
+          style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border-light)' }}
+        >
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-amber-500 text-slate-950 font-black shadow-md">
-              <ShieldCheck className="w-5 h-5" />
+            <div
+              className="p-2 rounded-xl"
+              style={{ background: 'var(--brand)', boxShadow: '0 2px 8px rgba(59,91,219,0.28)' }}
+            >
+              <ShieldCheck className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-base font-black text-white leading-tight">
+              <h2 className="text-base font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>
                 {initialData ? t.modalEditTitle : t.modalAddTitle}
               </h2>
-              <p className="text-xs text-slate-300 font-medium mt-0.5">{t.modalSubtitle}</p>
+              <p className="text-xs font-medium mt-0.5" style={{ color: 'var(--text-muted)' }}>{t.modalSubtitle}</p>
             </div>
           </div>
           <button
             id="form-close-btn"
             onClick={onClose}
-            className="p-2 text-slate-300 hover:text-white rounded-xl hover:bg-slate-800 transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+            className="p-2 rounded-xl transition-all min-h-[44px] min-w-[44px] flex items-center justify-center"
+            style={{ color: 'var(--text-muted)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Scrollable Form Body */}
-        <form id="booking-form" onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-5 space-y-5 text-slate-900 bg-white">
+        <form id="booking-form" onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-5 space-y-5" style={{ background: 'var(--bg-card)' }}>
 
           {/* Row 1: Date & Status */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-black text-slate-900 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-amber-600 shrink-0" />
+              <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                <Calendar className="w-4 h-4 shrink-0" style={{ color: 'var(--brand)' }} />
                 {t.fieldDate}
               </label>
               <input
@@ -191,13 +225,13 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                 id="field-date"
                 value={formData.createdAt}
                 onChange={(e) => setFormData({ ...formData, createdAt: e.target.value })}
-                className="w-full glass-input px-3.5 py-2.5 rounded-xl text-sm font-bold min-h-[44px]"
+                className="w-full glass-input px-3.5 py-2.5 rounded-xl text-sm min-h-[44px]"
               />
             </div>
 
             {/* Status Picker */}
             <div>
-              <label className="block text-xs font-black text-slate-900 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
                 {t.fieldStatus}
               </label>
               <div className="grid grid-cols-2 gap-1.5">
@@ -206,9 +240,11 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                     key={opt.value}
                     type="button"
                     onClick={() => setFormData({ ...formData, status: opt.value })}
-                    className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs font-bold transition-all min-h-[44px] justify-center ${
-                      formData.status === opt.value ? opt.activeClass : opt.colorClass
-                    }`}
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs font-semibold transition-all min-h-[44px] justify-center"
+                    style={formData.status === opt.value
+                      ? opt.activeStyle
+                      : { background: 'var(--bg-muted)', border: '1px solid var(--border-light)', color: 'var(--text-muted)' }
+                    }
                   >
                     {opt.icon}
                     <span className="leading-tight">{statusLabel(opt.value)}</span>
@@ -221,9 +257,9 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
           {/* Row 2: Name & Phone */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-black text-slate-900 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <User className="w-4 h-4 text-amber-600 shrink-0" />
-                {t.fieldName} <span className="text-rose-600 font-black">*</span>
+              <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                <User className="w-4 h-4 shrink-0" style={{ color: 'var(--brand)' }} />
+                {t.fieldName} <span className="font-black" style={{ color: 'var(--red)' }}>*</span>
               </label>
               <input
                 type="text"
@@ -231,19 +267,19 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                 placeholder={t.fieldNamePlaceholder}
                 value={formData.customerName}
                 onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                className={`w-full glass-input px-3.5 py-2.5 rounded-xl text-sm font-bold min-h-[44px] ${errors.customerName ? 'border-rose-500 ring-2 ring-rose-200' : ''}`}
+                className={`w-full glass-input px-3.5 py-2.5 rounded-xl text-sm min-h-[44px] ${errors.customerName ? 'border-red-400' : ''}`}
               />
               {errors.customerName && (
-                <p className="text-xs font-black text-rose-600 mt-1 flex items-center gap-1">
+                <p className="text-xs font-semibold mt-1 flex items-center gap-1" style={{ color: 'var(--red)' }}>
                   ⚠️ {errors.customerName}
                 </p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-black text-slate-900 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <Phone className="w-4 h-4 text-amber-600 shrink-0" />
-                {t.fieldPhone} <span className="text-rose-600 font-black">*</span>
+              <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                <Phone className="w-4 h-4 shrink-0" style={{ color: 'var(--brand)' }} />
+                {t.fieldPhone} <span className="font-black" style={{ color: 'var(--red)' }}>*</span>
               </label>
               <input
                 type="tel"
@@ -251,10 +287,10 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                 placeholder={t.fieldPhonePlaceholder}
                 value={formData.phoneNumber}
                 onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                className={`w-full glass-input px-3.5 py-2.5 rounded-xl text-sm font-bold min-h-[44px] ${errors.phoneNumber ? 'border-rose-500 ring-2 ring-rose-200' : ''}`}
+                className={`w-full glass-input px-3.5 py-2.5 rounded-xl text-sm min-h-[44px] ${errors.phoneNumber ? 'border-red-400' : ''}`}
               />
               {errors.phoneNumber && (
-                <p className="text-xs font-black text-rose-600 mt-1 flex items-center gap-1">
+                <p className="text-xs font-semibold mt-1 flex items-center gap-1" style={{ color: 'var(--red)' }}>
                   ⚠️ {errors.phoneNumber}
                 </p>
               )}
@@ -263,7 +299,7 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
 
           {/* Row 3: Booking Channel */}
           <div>
-            <label className="block text-xs font-black text-slate-900 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
               {t.fieldChannel}
             </label>
             <div className="grid grid-cols-2 gap-2.5">
@@ -271,98 +307,137 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                 type="button"
                 id="channel-booking-btn"
                 onClick={() => setFormData({ ...formData, bookingChannel: 'booking_com' })}
-                className={`p-3 rounded-xl border flex items-center gap-2.5 text-left transition-all min-h-[62px] ${
-                  formData.bookingChannel === 'booking_com'
-                    ? 'bg-blue-50/90 border-blue-600 shadow-md ring-2 ring-blue-300'
-                    : 'bg-slate-50 border-slate-300 hover:border-slate-400'
-                }`}
+                className="p-3 rounded-xl flex items-center gap-2.5 text-left transition-all min-h-[62px]"
+                style={formData.bookingChannel === 'booking_com' ? {
+                  background: 'var(--blue-bg)',
+                  border: '1.5px solid var(--blue)',
+                } : {
+                  background: 'var(--bg-muted)',
+                  border: '1.5px solid var(--border-default)',
+                }}
               >
-                <div className={`p-2.5 rounded-xl shrink-0 ${formData.bookingChannel === 'booking_com' ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-200 text-slate-600'}`}>
+                <div
+                  className="p-2.5 rounded-xl shrink-0"
+                  style={formData.bookingChannel === 'booking_com'
+                    ? { background: 'var(--blue)', color: '#fff' }
+                    : { background: 'var(--bg-hover)', color: 'var(--text-muted)' }}
+                >
                   <Globe className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-sm font-black text-slate-900">Booking.com</div>
-                  <div className="text-xs text-slate-700 font-bold leading-tight">{t.fieldChannelBookingDesc}</div>
+                  <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Booking.com</div>
+                  <div className="text-xs leading-tight" style={{ color: 'var(--text-muted)' }}>{t.fieldChannelBookingDesc}</div>
                 </div>
-                {formData.bookingChannel === 'booking_com' && <CheckCircle2 className="w-5 h-5 text-blue-600 ml-auto shrink-0" />}
+                {formData.bookingChannel === 'booking_com' && <CheckCircle2 className="w-5 h-5 ml-auto shrink-0" style={{ color: 'var(--blue)' }} />}
               </button>
 
               <button
                 type="button"
                 id="channel-walkin-btn"
                 onClick={() => setFormData({ ...formData, bookingChannel: 'walk_in' })}
-                className={`p-3 rounded-xl border flex items-center gap-2.5 text-left transition-all min-h-[62px] ${
-                  formData.bookingChannel === 'walk_in'
-                    ? 'bg-emerald-50/90 border-emerald-600 shadow-md ring-2 ring-emerald-300'
-                    : 'bg-slate-50 border-slate-300 hover:border-slate-400'
-                }`}
+                className="p-3 rounded-xl flex items-center gap-2.5 text-left transition-all min-h-[62px]"
+                style={formData.bookingChannel === 'walk_in' ? {
+                  background: 'var(--green-bg)',
+                  border: '1.5px solid var(--green)',
+                } : {
+                  background: 'var(--bg-muted)',
+                  border: '1.5px solid var(--border-default)',
+                }}
               >
-                <div className={`p-2.5 rounded-xl shrink-0 ${formData.bookingChannel === 'walk_in' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-200 text-slate-600'}`}>
+                <div
+                  className="p-2.5 rounded-xl shrink-0"
+                  style={formData.bookingChannel === 'walk_in'
+                    ? { background: 'var(--green)', color: '#fff' }
+                    : { background: 'var(--bg-hover)', color: 'var(--text-muted)' }}
+                >
                   <Footprints className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-sm font-black text-slate-900">Walk-in</div>
-                  <div className="text-xs text-slate-700 font-bold leading-tight">{t.fieldChannelWalkInDesc}</div>
+                  <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Walk-in</div>
+                  <div className="text-xs leading-tight" style={{ color: 'var(--text-muted)' }}>{t.fieldChannelWalkInDesc}</div>
                 </div>
-                {formData.bookingChannel === 'walk_in' && <CheckCircle2 className="w-5 h-5 text-emerald-600 ml-auto shrink-0" />}
+                {formData.bookingChannel === 'walk_in' && <CheckCircle2 className="w-5 h-5 ml-auto shrink-0" style={{ color: 'var(--green)' }} />}
               </button>
             </div>
           </div>
 
           {/* Row 4: Bed Type */}
           <div>
-            <label className="block text-xs font-black text-slate-900 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
               {t.fieldBed}
             </label>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { value: 'big',   icon: <BedDouble className="w-5 h-5" />, label: t.bedBig,   desc: t.bedBigDesc,   active: 'bg-purple-50/90 border-purple-600 ring-2 ring-purple-300 text-purple-950', icon_active: 'bg-purple-600 text-white shadow-sm' },
-                { value: 'small', icon: <BedSingle className="w-5 h-5" />, label: t.bedSmall, desc: t.bedSmallDesc, active: 'bg-cyan-50/90 border-cyan-600 ring-2 ring-cyan-300 text-cyan-950',       icon_active: 'bg-cyan-600 text-white shadow-sm' },
-                { value: 'both',  icon: <><BedDouble className="w-4 h-4" /><BedSingle className="w-3.5 h-3.5 -ml-0.5" /></>, label: t.bedBoth, desc: t.bedBothDesc, active: 'bg-amber-50/90 border-amber-600 ring-2 ring-amber-300 text-amber-950', icon_active: 'bg-amber-600 text-white shadow-sm' },
+                { value: 'big',   icon: <BedDouble className="w-5 h-5" />, label: t.bedBig,   desc: t.bedBigDesc,   activeStyle: { background: 'var(--violet-bg)', border: '1.5px solid var(--violet)', color: '#5f3dc4' }, iconStyle: { background: 'var(--violet)', color: '#fff' } },
+                { value: 'small', icon: <BedSingle className="w-5 h-5" />, label: t.bedSmall, desc: t.bedSmallDesc, activeStyle: { background: '#e3fafc', border: '1.5px solid #66d9e8', color: '#0c7a8a' }, iconStyle: { background: '#0c8599', color: '#fff' } },
+                { value: 'both',  icon: <><BedDouble className="w-4 h-4" /><BedSingle className="w-3.5 h-3.5 -ml-0.5" /></>, label: t.bedBoth, desc: t.bedBothDesc, activeStyle: { background: 'var(--amber-bg)', border: '1.5px solid var(--amber)', color: '#7d5e00' }, iconStyle: { background: 'var(--amber)', color: '#fff' } },
               ].map((bed) => (
                 <button
                   key={bed.value}
                   type="button"
                   id={`bed-${bed.value}-btn`}
                   onClick={() => setFormData({ ...formData, bedType: bed.value as BedType })}
-                  className={`p-3 rounded-xl border flex flex-col items-center text-center transition-all min-h-[74px] justify-center gap-1 ${
-                    formData.bedType === bed.value
-                      ? bed.active + ' shadow-md'
-                      : 'bg-slate-50 border-slate-300 text-slate-800 hover:border-slate-400'
-                  }`}
+                  className="p-3 rounded-xl flex flex-col items-center text-center transition-all min-h-[74px] justify-center gap-1"
+                  style={formData.bedType === bed.value
+                    ? bed.activeStyle
+                    : { background: 'var(--bg-muted)', border: '1.5px solid var(--border-default)', color: 'var(--text-muted)' }
+                  }
                 >
-                  <div className={`p-1.5 rounded-lg flex items-center gap-0.5 ${formData.bedType === bed.value ? bed.icon_active : 'bg-slate-200 text-slate-600'}`}>
+                  <div
+                    className="p-1.5 rounded-lg flex items-center gap-0.5"
+                    style={formData.bedType === bed.value ? bed.iconStyle : { background: 'var(--bg-hover)', color: 'var(--text-muted)' }}
+                  >
                     {bed.icon}
                   </div>
-                  <span className="text-xs font-black text-slate-900 leading-tight">{bed.label}</span>
-                  <span className="text-[11px] text-slate-700 font-bold leading-tight hidden sm:block">{bed.desc}</span>
+                  <span className="text-xs font-semibold leading-tight">{bed.label}</span>
+                  <span className="text-[11px] leading-tight hidden sm:block" style={{ color: 'var(--text-muted)' }}>{bed.desc}</span>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Row 5: Check-in / Check-out Box */}
-          <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 p-4 space-y-3 shadow-xs">
-            {/* Section Header + Night Presets */}
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-amber-600" />
-                {t.fieldCheckIn} / {t.fieldCheckOut}
-              </span>
+          <div
+            className="rounded-2xl p-4 space-y-3"
+            style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                  <Clock className="w-4 h-4" style={{ color: 'var(--brand)' }} />
+                  {t.fieldCheckIn} / {t.fieldCheckOut}
+                </span>
+                <span
+                  className="text-xs font-extrabold px-2.5 py-0.5 rounded-full"
+                  style={{ background: 'var(--brand-light)', border: '1px solid #c5d0fa', color: 'var(--brand)' }}
+                >
+                  🌙 พัก {nights} คืน
+                </span>
+              </div>
+
               <div className="flex items-center gap-1.5">
-                <button type="button" onClick={() => addNights(1)} className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs transition flex items-center gap-0.5 min-h-[32px] shadow-xs">
-                  <Plus className="w-3.5 h-3.5" />{t.preset1Night}
+                <button
+                  type="button"
+                  onClick={() => addNights(1)}
+                  className="px-2.5 py-1 rounded-lg font-semibold text-xs transition flex items-center gap-0.5 min-h-[32px]"
+                  style={{ background: 'var(--brand)', color: '#fff', boxShadow: '0 1px 4px rgba(59,91,219,0.25)' }}
+                >
+                  <Plus className="w-3.5 h-3.5" />1 คืน
                 </button>
-                <button type="button" onClick={() => addNights(2)} className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs transition flex items-center gap-0.5 min-h-[32px] shadow-xs">
-                  <Plus className="w-3.5 h-3.5" />{t.preset2Nights}
+                <button
+                  type="button"
+                  onClick={() => addNights(2)}
+                  className="px-2.5 py-1 rounded-lg font-semibold text-xs transition flex items-center gap-0.5 min-h-[32px]"
+                  style={{ background: 'var(--brand)', color: '#fff', boxShadow: '0 1px 4px rgba(59,91,219,0.25)' }}
+                >
+                  <Plus className="w-3.5 h-3.5" />2 คืน
                 </button>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {/* Check-in */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-black text-emerald-800">
+                <label className="block text-xs font-semibold" style={{ color: 'var(--green)' }}>
                   ✅ {t.fieldCheckIn}
                 </label>
                 <div className="flex gap-1.5">
@@ -371,12 +446,13 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                     id="field-checkin-date"
                     value={formData.checkInDate}
                     onChange={(e) => setFormData({ ...formData, checkInDate: e.target.value })}
-                    className="flex-1 glass-input px-3 py-2 rounded-xl text-xs font-bold min-h-[42px]"
+                    className="flex-1 glass-input px-3 py-2 rounded-xl text-xs min-h-[42px]"
                   />
                   <button
                     type="button"
                     onClick={setToday}
-                    className="px-2.5 py-1.5 rounded-xl bg-emerald-100 border border-emerald-400 text-emerald-950 font-black text-xs hover:bg-emerald-200 transition shrink-0 min-h-[42px]"
+                    className="px-2.5 py-1.5 rounded-xl font-semibold text-xs transition shrink-0 min-h-[42px]"
+                    style={{ background: 'var(--green-bg)', border: '1px solid var(--green-border)', color: '#087f5b' }}
                   >
                     {t.btnTodayDate}
                   </button>
@@ -386,13 +462,12 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                   id="field-checkin-time"
                   value={formData.checkInTime}
                   onChange={(e) => setFormData({ ...formData, checkInTime: e.target.value })}
-                  className="w-full glass-input px-3 py-2 rounded-xl text-xs font-bold min-h-[42px]"
+                  className="w-full glass-input px-3 py-2 rounded-xl text-xs min-h-[42px]"
                 />
               </div>
 
-              {/* Check-out */}
               <div className="space-y-1.5">
-                <label className="block text-xs font-black text-rose-800">
+                <label className="block text-xs font-semibold" style={{ color: 'var(--red)' }}>
                   🚪 {t.fieldCheckOut}
                 </label>
                 <input
@@ -400,14 +475,14 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                   id="field-checkout-date"
                   value={formData.checkOutDate}
                   onChange={(e) => setFormData({ ...formData, checkOutDate: e.target.value })}
-                  className="w-full glass-input px-3 py-2 rounded-xl text-xs font-bold min-h-[42px]"
+                  className="w-full glass-input px-3 py-2 rounded-xl text-xs min-h-[42px]"
                 />
                 <input
                   type="time"
                   id="field-checkout-time"
                   value={formData.checkOutTime}
                   onChange={(e) => setFormData({ ...formData, checkOutTime: e.target.value })}
-                  className="w-full glass-input px-3 py-2 rounded-xl text-xs font-bold min-h-[42px]"
+                  className="w-full glass-input px-3 py-2 rounded-xl text-xs min-h-[42px]"
                 />
               </div>
             </div>
@@ -416,29 +491,33 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
           {/* Row 6: Price */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                <DollarSign className="w-4 h-4 text-amber-600" />
-                {t.fieldPrice} <span className="text-rose-600 font-black">*</span>
+              <label className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                <DollarSign className="w-4 h-4" style={{ color: 'var(--brand)' }} />
+                {t.fieldPrice} <span className="font-black" style={{ color: 'var(--red)' }}>*</span>
               </label>
               <div className="flex items-center gap-1">
-                {[1000, 1500, 2000].map((p) => (
+                {[1000, 1500, 2000].map((rate) => (
                   <button
-                    key={p}
+                    key={rate}
                     type="button"
-                    onClick={() => setFormData({ ...formData, price: p })}
-                    className={`px-3 py-1 rounded-xl font-black text-xs transition min-h-[32px] ${
-                      formData.price === p
-                        ? 'bg-amber-500 text-slate-950 shadow-sm border border-amber-600'
-                        : 'bg-slate-100 hover:bg-amber-100 border border-slate-300 text-slate-900'
-                    }`}
+                    onClick={() => setFormData({ ...formData, price: rate * nights })}
+                    className="px-2.5 py-1 rounded-xl font-semibold text-xs transition min-h-[32px]"
+                    style={formData.price === rate * nights ? {
+                      background: 'var(--brand)',
+                      color: '#fff',
+                    } : {
+                      background: 'var(--bg-muted)',
+                      border: '1px solid var(--border-light)',
+                      color: 'var(--text-secondary)',
+                    }}
                   >
-                    {p.toLocaleString()}
+                    ฿{rate.toLocaleString()}/คืน
                   </button>
                 ))}
               </div>
             </div>
             <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-950 font-black text-lg">฿</span>
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-lg" style={{ color: 'var(--text-secondary)' }}>฿</span>
               <input
                 type="number"
                 id="field-price"
@@ -447,19 +526,19 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                 placeholder="1500"
                 value={formData.price || ''}
                 onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
-                className={`w-full glass-input pl-9 pr-14 py-3 rounded-xl text-xl font-black text-amber-900 min-h-[52px] ${errors.price ? 'border-rose-500 ring-2 ring-rose-200' : ''}`}
+                className={`w-full glass-input pl-9 pr-14 py-3 rounded-xl text-xl font-bold min-h-[52px] ${errors.price ? 'border-red-400' : ''}`}
               />
-              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-extrabold text-slate-600">{t.priceUnit}</span>
+              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{t.priceUnit}</span>
             </div>
             {errors.price && (
-              <p className="text-xs font-black text-rose-600 mt-1 flex items-center gap-1">⚠️ {errors.price}</p>
+              <p className="text-xs font-semibold mt-1 flex items-center gap-1" style={{ color: 'var(--red)' }}>⚠️ {errors.price}</p>
             )}
           </div>
 
           {/* Row 7: Notes */}
           <div>
-            <label className="block text-xs font-black text-slate-900 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <FileText className="w-4 h-4 text-amber-600" />
+            <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+              <FileText className="w-4 h-4" style={{ color: 'var(--brand)' }} />
               {t.fieldNotes}
             </label>
             <textarea
@@ -468,22 +547,25 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
               placeholder={t.fieldNotesPlaceholder}
               value={formData.notes || ''}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="w-full glass-input px-3.5 py-2.5 rounded-xl text-sm font-bold"
+              className="w-full glass-input px-3.5 py-2.5 rounded-xl text-sm"
             />
           </div>
 
         </form>
 
         {/* Sticky Footer Actions */}
-        <div className="px-5 py-4 border-t border-slate-200 flex items-center justify-between gap-3 bg-white shrink-0">
+        <div
+          className="px-5 py-4 flex items-center justify-between gap-3 shrink-0"
+          style={{ borderTop: '1px solid var(--border-light)', background: 'var(--bg-muted)' }}
+        >
           {initialData && onPrintReceipt ? (
             <button
               type="button"
               onClick={() => onPrintReceipt(initialData)}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-extrabold bg-slate-100 hover:bg-slate-200 text-slate-900 border border-slate-300 transition active:scale-95 min-h-[44px]"
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all active:scale-95 min-h-[44px] btn-ghost"
             >
-              <Printer className="w-4 h-4 text-emerald-600" />
-              <span>{t.btnPrintPdf || 'พิมพ์ใบเสร็จ (A4)'}</span>
+              <Printer className="w-4 h-4" style={{ color: 'var(--green)' }} />
+              <span style={{ color: 'var(--text-secondary)' }}>{t.btnPrintPdf || 'พิมพ์ใบเสร็จ (A4)'}</span>
             </button>
           ) : <div />}
 
@@ -491,7 +573,7 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-100 transition min-h-[44px]"
+              className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-all min-h-[44px] btn-ghost"
             >
               {t.btnCancel}
             </button>
@@ -499,7 +581,7 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
               type="submit"
               form="booking-form"
               onClick={handleSubmit as any}
-              className="px-6 py-2.5 rounded-xl text-sm font-black bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-md active:scale-95 transition min-h-[44px]"
+              className="px-6 py-2.5 rounded-xl text-sm font-bold btn-primary active:scale-95 transition-all min-h-[44px]"
             >
               {initialData ? t.btnSaveEdit : t.btnSaveAdd}
             </button>

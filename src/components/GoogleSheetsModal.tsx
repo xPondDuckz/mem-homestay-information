@@ -218,6 +218,19 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
               />
             </div>
 
+            {/* Tip for Vercel Environment Variables */}
+            <div className="bg-sky-50 border border-sky-200 rounded-xl p-3 text-xs text-sky-900 space-y-1">
+              <p className="font-bold flex items-center gap-1.5 text-sky-800">
+                💡 เคล็ดลับ: ไม่ต้องกรอกใหม่เมื่อ Deploy บน Vercel
+              </p>
+              <p className="text-[11px] leading-relaxed text-sky-700">
+                สามารถตั้งค่า Environment Variable บน Vercel ได้โดยไปที่{' '}
+                <strong className="text-sky-900">Project Settings &gt; Environment Variables</strong> แล้วเพิ่ม Name:{' '}
+                <code className="bg-sky-100 text-sky-900 px-1 py-0.5 rounded font-mono font-bold">VITE_GOOGLE_SHEETS_URL</code>{' '}
+                และ Value: <span className="underline">URL ของคุณ</span> ระบบจะจดจำลิงก์ให้ถาวรโดยอัตโนมัติในทุกการ Deploy!
+              </p>
+            </div>
+
             {/* Test Result Message */}
             {testResult && (
               <div

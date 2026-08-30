@@ -128,6 +128,8 @@ function createJsonResponse(data) {
 }
 `;
 
+import { cleanDateStr, cleanTimeStr } from './formatters';
+
 /**
  * Fetch all bookings from Google Sheets
  */
@@ -159,15 +161,15 @@ export async function fetchFromGoogleSheets(url: string): Promise<BookingRecord[
 
       return {
         id: String(item.id || '').replace(/^'/, '').trim(),
-        createdAt: String(item.createdAt || '').trim(),
+        createdAt: cleanDateStr(item.createdAt),
         customerName: String(item.customerName || '').trim(),
         phoneNumber: phone,
         bedType: item.bedType || 'big',
         bookingChannel: item.bookingChannel || 'walk_in',
-        checkInDate: String(item.checkInDate || '').trim(),
-        checkInTime: String(item.checkInTime || '').trim(),
-        checkOutDate: String(item.checkOutDate || '').trim(),
-        checkOutTime: String(item.checkOutTime || '').trim(),
+        checkInDate: cleanDateStr(item.checkInDate),
+        checkInTime: cleanTimeStr(item.checkInTime),
+        checkOutDate: cleanDateStr(item.checkOutDate),
+        checkOutTime: cleanTimeStr(item.checkOutTime),
         price: Number(item.price) || 0,
         notes: String(item.notes || '').trim(),
         status: item.status || 'confirmed',
