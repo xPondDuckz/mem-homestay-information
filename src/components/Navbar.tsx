@@ -1,229 +1,176 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import type { Language } from '../utils/translations';
-import { Home, Download, LogIn, LogOut, Banknote, FileSpreadsheet, Wifi } from 'lucide-react';
+import { Download, FileSpreadsheet, Plus, Home, Check, Loader2, CloudOff, RotateCw } from 'lucide-react';
+import type { SyncStatus } from '../hooks/useSheetsSync';
+import type { LucideIcon } from 'lucide-react';
+
+export type ViewKey = 'table' | 'calendar' | 'analytics';
+export interface ViewItem { key: ViewKey; label: string; icon: LucideIcon }
 
 interface NavbarProps {
+  views: ViewItem[];
+  currentView: ViewKey;
+  onViewChange: (v: ViewKey) => void;
   onOpenAddModal: () => void;
   onOpenExportModal: () => void;
   onOpenSheetsModal: () => void;
   hasSheetsUrl: boolean;
-  totalBookingsCount: number;
+  syncStatus: SyncStatus;
+  onRetrySync: () => void;
   lang: Language;
   onLanguageChange: (lang: Language) => void;
   t: any;
-  todayCheckIns: number;
-  todayCheckOuts: number;
-  totalRevenue: number;
-  onTodayCheckInClick?: () => void;
-  onTodayCheckOutClick?: () => void;
 }
 
+export const syncDotColor = (s: SyncStatus) =>
+  s === 'saved' ? 'var(--green)' : s === 'saving' || s === 'loading' ? 'var(--amber)' : s === 'off' ? 'var(--border-strong)' : 'var(--red)';
+
+/** Small live indicator of the Google Sheets save state. */
+const SyncBadge: React.FC<{ status: SyncStatus; onRetry: () => void; onOpen: () => void }> = ({ status, onRetry, onOpen }) => {
+  const map: Record<SyncStatus, { icon: React.ReactNode; label: string; color: string }> = {
+    off:     { icon: <FileSpreadsheet className="w-4 h-4" />, label: 'ยังไม่เชื่อม Sheet', color: 'var(--text-muted)' },
+    loading: { icon: <Loader2 className="w-4 h-4 animate-spin" />, label: 'กำลังโหลด…', color: 'var(--text-secondary)' },
+    saving:  { icon: <Loader2 className="w-4 h-4 animate-spin" />, label: 'กำลังบันทึก…', color: 'var(--text-secondary)' },
+    saved:   { icon: <Check className="w-4 h-4" />, label: 'บันทึกลง Sheet แล้ว', color: 'var(--green)' },
+    error:   { icon: <RotateCw className="w-4 h-4" />, label: 'บันทึกไม่สำเร็จ · ลองใหม่', color: 'var(--red)' },
+    offline: { icon: <CloudOff className="w-4 h-4" />, label: 'ออฟไลน์ · รอบันทึก', color: 'var(--amber)' },
+  };
+  const m = map[status];
+  const isProblem = status === 'error' || status === 'offline';
+  return (
+    <button
+      onClick={isProblem ? onRetry : onOpen}
+      title={m.label}
+      aria-live="polite"
+      className={`h-9 px-2.5 rounded-lg inline-flex items-center gap-1.5 text-[13px] transition-colors hover:bg-[var(--bg-hover)] ${isProblem ? 'bg-[var(--red-bg)]' : ''}`}
+      style={{ color: m.color }}
+    >
+      {m.icon}
+      <span key={status} className="hidden lg:inline animate-fade-in">{m.label}</span>
+    </button>
+  );
+};
+
+/** Segmented control with a sliding thumb. */
+export const Segmented: React.FC<{ views: ViewItem[]; current: ViewKey; onChange: (v: ViewKey) => void }> = ({ views, current, onChange }) => {
+  const index = Math.max(0, views.findIndex((v) => v.key === current));
+  return (
+    <nav className="segmented" style={{ '--count': views.length, '--index': index } as React.CSSProperties}>
+      <span className="segmented-thumb" aria-hidden />
+      {views.map(({ key, label, icon: Icon }) => (
+        <button
+          key={key}
+          onClick={() => onChange(key)}
+          aria-current={current === key ? 'page' : undefined}
+          className="segmented-btn"
+        >
+          <Icon className="w-4 h-4" aria-hidden />
+          {label}
+        </button>
+      ))}
+    </nav>
+  );
+};
+
 export const Navbar: React.FC<NavbarProps> = ({
-  onOpenAddModal: _onOpenAddModal,
-  onOpenExportModal,
-  onOpenSheetsModal,
-  hasSheetsUrl,
-  totalBookingsCount,
-  lang,
-  onLanguageChange,
-  t,
-  todayCheckIns,
-  todayCheckOuts,
-  totalRevenue,
-  onTodayCheckInClick,
-  onTodayCheckOutClick,
+  views, currentView, onViewChange,
+  onOpenAddModal, onOpenExportModal, onOpenSheetsModal,
+  syncStatus, onRetrySync, lang, onLanguageChange, t,
 }) => {
-  const currentDateFormatted = new Date().toLocaleDateString(lang === 'th' ? 'th-TH' : 'en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  });
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 4);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   return (
-    <header className="sticky top-0 z-30 navbar-glass transition-all">
+    <header className={`sticky top-0 z-30 navbar-glass ${scrolled ? 'scrolled' : ''}`} style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+      <div className="max-w-6xl mx-auto px-4 lg:px-6 h-16 flex items-center justify-between gap-4">
 
-      {/* Top Row */}
-      <div className="max-w-7xl mx-auto px-4 lg:px-8">
-        <div className="flex items-center justify-between h-[56px] gap-3">
-
-          {/* Brand */}
-          <div className="flex items-center gap-3 min-w-0">
-            <div
-              className="h-9 w-9 rounded-xl flex items-center justify-center animate-logo shrink-0"
-              style={{ background: '#3b5bdb', boxShadow: '0 3px 12px rgba(59,91,219,0.28)' }}
-            >
-              <Home className="h-4.5 w-4.5 text-white" style={{ width: 18, height: 18 }} />
-            </div>
-            <div className="min-w-0 hidden sm:block">
-              <h1 className="text-[14px] font-bold leading-none" style={{ color: 'var(--text-primary)' }}>
-                เมม โฮมสเตย์
-                <span className="font-normal ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>Mem Homestay</span>
-              </h1>
-              <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{currentDateFormatted}</p>
-            </div>
-            <div className="sm:hidden">
-              <h1 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>เมม โฮมสเตย์</h1>
-            </div>
-          </div>
-
-          {/* Right Controls */}
-          <div className="flex items-center gap-2 shrink-0">
-
-            {/* Total Badge */}
-            <div
-              className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold"
-              style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)', color: 'var(--text-secondary)' }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block" />
-              {t.totalRecordsBadge}:
-              <strong style={{ color: 'var(--brand)', fontWeight: 700 }}>{totalBookingsCount}</strong>
-            </div>
-
-            {/* Google Sheets Button */}
-            <button
-              id="google-sheets-btn"
-              onClick={onOpenSheetsModal}
-              title={hasSheetsUrl ? t.googleSheetsConnected : t.googleSheetsNotConnected}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all min-h-[36px]"
-              style={hasSheetsUrl ? {
-                background: '#e6fcf5', border: '1px solid #c3fae8', color: '#087f5b',
-              } : {
-                background: 'var(--bg-muted)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)',
-              }}
-            >
-              {hasSheetsUrl
-                ? <Wifi className="w-3.5 h-3.5" />
-                : <FileSpreadsheet className="w-3.5 h-3.5" />
-              }
-              <span className="hidden sm:inline">
-                {hasSheetsUrl ? 'Google Sheet' : t.googleSheetsNotConnected}
-              </span>
-              {hasSheetsUrl && (
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-              )}
-            </button>
-
-            {/* Language Switcher */}
-            <div
-              className="flex items-center rounded-xl p-0.5 gap-0.5"
-              style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}
-            >
-              {(['th', 'en'] as Language[]).map((l) => (
-                <button
-                  key={l}
-                  id={`lang-${l}-btn`}
-                  onClick={() => onLanguageChange(l)}
-                  className="px-3 py-1.5 rounded-[10px] text-xs font-bold tracking-widest transition-all min-h-[30px] min-w-[38px]"
-                  style={lang === l ? {
-                    background: 'var(--brand)', color: '#fff',
-                    boxShadow: '0 1px 4px rgba(59,91,219,0.25)',
-                  } : {
-                    color: 'var(--text-muted)',
-                    background: 'transparent',
-                  }}
-                >
-                  {l.toUpperCase()}
-                </button>
-              ))}
-            </div>
-
-            {/* Export Button */}
-            <button
-              id="export-btn"
-              onClick={onOpenExportModal}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all min-h-[36px] btn-ghost"
-            >
-              <Download className="w-3.5 h-3.5" style={{ color: 'var(--green)' }} />
-              <span className="hidden md:inline">{t.csvReportBtn}</span>
-            </button>
-
+        {/* Brand */}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--brand)' }}>
+            <Home className="w-[18px] h-[18px] text-white" aria-hidden />
+          </span>
+          <div className="leading-tight min-w-0">
+            <p className="text-[15px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>เมม โฮมสเตย์</p>
+            <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>Mem Homestay</p>
           </div>
         </div>
-      </div>
 
-      {/* Today Summary Strip */}
-      <div className="today-strip">
-        <div className="max-w-7xl mx-auto px-4 lg:px-8 py-2 flex flex-wrap items-center gap-x-6 gap-y-1">
+        {/* Views — tablet & desktop */}
+        <div className="hidden md:block">
+          <Segmented views={views} current={currentView} onChange={onViewChange} />
+        </div>
 
-          <span
-            className="text-[10px] font-black uppercase tracking-[0.15em] shrink-0"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            {t.todayBarLabel}
+        {/* Actions */}
+        <div className="flex items-center gap-1 shrink-0">
+          <span id="google-sheets-btn" className="hidden md:inline-flex">
+            <SyncBadge status={syncStatus} onRetry={onRetrySync} onOpen={onOpenSheetsModal} />
           </span>
 
-          <span className="hidden sm:block h-3 w-px" style={{ background: 'var(--border-light)' }} />
-
-          {/* Check-in */}
-          <button
-            onClick={onTodayCheckInClick}
-            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-all text-left"
-            title="กดเพื่อกรองเฉพาะรายการที่ต้อง Check-in วันนี้"
-          >
-            <div
-              className="flex items-center justify-center w-6 h-6 rounded-lg shrink-0"
-              style={{ background: '#e6fcf5' }}
-            >
-              <LogIn className="w-3.5 h-3.5" style={{ color: 'var(--green)' }} />
-            </div>
-            <span className="text-xs font-medium hidden sm:inline" style={{ color: 'var(--text-secondary)' }}>
-              {t.todayCheckinLabel}:
-            </span>
-            <span className="text-xs font-medium sm:hidden" style={{ color: 'var(--text-secondary)' }}>Check-in:</span>
-            {todayCheckIns > 0 ? (
-              <span
-                className="text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-xs"
-                style={{ background: '#e6fcf5', border: '1px solid var(--green-border)', color: '#087f5b' }}
-              >
-                {todayCheckIns} {t.todayRooms} 🔍
-              </span>
-            ) : (
-              <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{t.todayNone}</span>
-            )}
+          <button id="export-btn" onClick={onOpenExportModal} title={t.csvReportBtn} aria-label={t.csvReportBtn} className="icon-btn">
+            <Download className="w-[18px] h-[18px]" />
           </button>
 
-          {/* Check-out */}
           <button
-            onClick={onTodayCheckOutClick}
-            className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-all text-left"
-            title="กดเพื่อกรองเฉพาะรายการที่ต้อง Check-out วันนี้"
+            id="lang-toggle-btn"
+            onClick={() => onLanguageChange(lang === 'th' ? 'en' : 'th')}
+            className="icon-btn text-xs font-semibold tracking-wider"
+            aria-label="Switch language"
           >
-            <div
-              className="flex items-center justify-center w-6 h-6 rounded-lg shrink-0"
-              style={{ background: '#fff5f5' }}
-            >
-              <LogOut className="w-3.5 h-3.5" style={{ color: 'var(--red)' }} />
-            </div>
-            <span className="text-xs font-medium hidden sm:inline" style={{ color: 'var(--text-secondary)' }}>
-              {t.todayCheckoutLabel}:
-            </span>
-            <span className="text-xs font-medium sm:hidden" style={{ color: 'var(--text-secondary)' }}>Check-out:</span>
-            {todayCheckOuts > 0 ? (
-              <span
-                className="text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-xs"
-                style={{ background: '#fff5f5', border: '1px solid var(--red-border)', color: '#c92a2a' }}
-              >
-                {todayCheckOuts} {t.todayRooms} 🔍
-              </span>
-            ) : (
-              <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{t.todayNone}</span>
-            )}
+            {lang === 'th' ? 'EN' : 'TH'}
           </button>
 
-          {/* Revenue */}
-          <div className="ml-auto flex items-center gap-2 shrink-0">
-            <div
-              className="flex items-center justify-center w-6 h-6 rounded-lg"
-              style={{ background: 'var(--amber-bg)' }}
-            >
-              <Banknote className="w-3.5 h-3.5" style={{ color: 'var(--amber)' }} />
-            </div>
-            <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-              ฿{totalRevenue.toLocaleString()}
-            </span>
-          </div>
-
+          <button
+            id="add-booking-desktop-btn"
+            onClick={onOpenAddModal}
+            className="hidden md:inline-flex items-center gap-2 btn-primary h-10 pl-3.5 pr-4 ml-2 rounded-xl text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden lg:inline">{t.addBookingBtn}</span>
+            <span className="lg:hidden">{lang === 'th' ? 'เพิ่ม' : 'Add'}</span>
+          </button>
         </div>
       </div>
-
     </header>
+  );
+};
+
+/** Phone-only bottom navigation with a central add button. */
+export const BottomNav: React.FC<{
+  views: ViewItem[]; current: ViewKey; onChange: (v: ViewKey) => void;
+  onAdd: () => void; addLabel: string; onOpenSheets: () => void; hasSheetsUrl: boolean; syncStatus: SyncStatus;
+}> = ({ views, current, onChange, onAdd, addLabel, onOpenSheets, syncStatus }) => {
+  const [a, b, c] = views;
+  const Item = ({ v }: { v: ViewItem }) => (
+    <button className="bottom-nav-btn" aria-current={current === v.key ? 'page' : undefined} onClick={() => onChange(v.key)}>
+      <v.icon className="w-[22px] h-[22px]" aria-hidden />
+      {v.label}
+    </button>
+  );
+  return (
+    <nav className="bottom-nav md:hidden">
+      <div className="flex items-center px-2">
+        <Item v={a} />
+        <Item v={b} />
+        <div className="flex-1 flex justify-center">
+          <button id="fab-add-btn" onClick={onAdd} aria-label={addLabel} className="bottom-nav-add">
+            <Plus className="w-6 h-6" />
+          </button>
+        </div>
+        <Item v={c} />
+        <button className="bottom-nav-btn" onClick={onOpenSheets}>
+          <span className="relative">
+            <FileSpreadsheet className="w-[22px] h-[22px]" aria-hidden />
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-white"
+              style={{ background: syncDotColor(syncStatus) }} />
+          </span>
+          Sheets
+        </button>
+      </div>
+    </nav>
   );
 };

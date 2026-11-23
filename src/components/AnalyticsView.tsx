@@ -271,7 +271,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
         <div className="card p-5 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>ช่องทางยอดนิยม</span>
-            <div className="p-2 rounded-xl" style={{ background: 'var(--brand-light)', border: '1px solid #c5d0fa' }}>
+            <div className="p-2 rounded-xl" style={{ background: 'var(--brand-light)', border: '1px solid var(--brand-border)' }}>
               <Award className="w-4 h-4" style={{ color: 'var(--brand)' }} />
             </div>
           </div>
@@ -593,7 +593,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
             <div className="grid grid-cols-2 gap-3 pt-1 text-xs">
               <div className="p-3 rounded-xl" style={{ background: 'var(--blue-bg)', border: '1px solid var(--blue-border)' }}>
-                <span className="font-semibold flex items-center gap-1" style={{ color: '#1864ab' }}>
+                <span className="font-semibold flex items-center gap-1" style={{ color: '#2c5784' }}>
                   <Globe className="w-4 h-4" /> Booking.com
                 </span>
                 <strong className="font-bold text-base block mt-1" style={{ color: 'var(--text-primary)' }}>
@@ -602,7 +602,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               </div>
 
               <div className="p-3 rounded-xl" style={{ background: 'var(--green-bg)', border: '1px solid var(--green-border)' }}>
-                <span className="font-semibold flex items-center gap-1" style={{ color: '#087f5b' }}>
+                <span className="font-semibold flex items-center gap-1" style={{ color: '#1d6a49' }}>
                   <Footprints className="w-4 h-4" /> Walk-in
                 </span>
                 <strong className="font-bold text-base block mt-1" style={{ color: 'var(--text-primary)' }}>
@@ -624,14 +624,14 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
           <div className="space-y-2 text-xs">
             <div className="p-3 rounded-xl flex items-center justify-between" style={{ background: 'var(--violet-bg)', border: '1px solid var(--violet-border)' }}>
-              <span className="font-semibold flex items-center gap-1.5" style={{ color: '#5f3dc4' }}>
+              <span className="font-semibold flex items-center gap-1.5" style={{ color: '#544690' }}>
                 <BedDouble className="w-4 h-4" /> เตียงใหญ่ (Big Bed)
               </span>
               <strong className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>{bigBedCount} ห้อง</strong>
             </div>
 
-            <div className="p-3 rounded-xl flex items-center justify-between" style={{ background: '#e3fafc', border: '1px solid #99e9f2' }}>
-              <span className="font-semibold flex items-center gap-1.5" style={{ color: '#0c7a8a' }}>
+            <div className="p-3 rounded-xl flex items-center justify-between" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-default)' }}>
+              <span className="font-semibold flex items-center gap-1.5" style={{ color: '#57564f' }}>
                 <BedDouble className="w-4 h-4" /> เตียงเล็ก (Small Bed)
               </span>
               <strong className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>{smallBedCount} ห้อง</strong>
@@ -648,12 +648,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
           <div className="p-3 rounded-xl" style={{ background: 'var(--green-bg)', border: '1px solid var(--green-border)' }}>
-            <span className="font-semibold block" style={{ color: '#087f5b' }}>รอเช็คอิน (Confirmed)</span>
+            <span className="font-semibold block" style={{ color: '#1d6a49' }}>รอเช็คอิน (Confirmed)</span>
             <strong className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{statusConfirmedCount} รายการ</strong>
           </div>
 
           <div className="p-3 rounded-xl" style={{ background: 'var(--blue-bg)', border: '1px solid var(--blue-border)' }}>
-            <span className="font-semibold block" style={{ color: '#1864ab' }}>พักอยู่ (Checked-In)</span>
+            <span className="font-semibold block" style={{ color: '#2c5784' }}>พักอยู่ (Checked-In)</span>
             <strong className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{statusCheckedInCount} รายการ</strong>
           </div>
 
@@ -663,7 +663,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
           </div>
 
           <div className="p-3 rounded-xl" style={{ background: 'var(--red-bg)', border: '1px solid var(--red-border)' }}>
-            <span className="font-semibold block" style={{ color: '#c92a2a' }}>ยกเลิก (Cancelled)</span>
+            <span className="font-semibold block" style={{ color: '#9a3026' }}>ยกเลิก (Cancelled)</span>
             <strong className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{statusCancelledCount} รายการ</strong>
           </div>
         </div>

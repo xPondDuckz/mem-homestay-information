@@ -98,7 +98,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             <h2 className="text-base font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
               <CalendarIcon className="w-4 h-4" style={{ color: 'var(--brand)' }} />
               ปฏิทินการจองห้องพัก
-              <span className="text-xs px-2.5 py-0.5 rounded-full font-bold" style={{ background: 'var(--brand-light)', border: '1px solid #c5d0fa', color: 'var(--brand)' }}>
+              <span className="text-xs px-2.5 py-0.5 rounded-full font-bold" style={{ background: 'var(--brand-light)', border: '1px solid var(--brand-border)', color: 'var(--brand)' }}>
                 {new Date(year, monthIdx).toLocaleDateString(lang === 'th' ? 'th-TH' : 'en-US', { month: 'long', year: 'numeric' })}
               </span>
             </h2>
@@ -169,7 +169,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   {dayBookings.length > 0 && (
                     <span
                       className="text-[10px] font-bold px-1.5 py-0.2 rounded-full"
-                      style={{ background: 'var(--brand-light)', color: 'var(--brand)', border: '1px solid #c5d0fa' }}
+                      style={{ background: 'var(--brand-light)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}
                     >
                       {dayBookings.length}
                     </span>
@@ -182,13 +182,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     const isCheckIn = b.checkInDate === cell.dateStr;
                     const isCheckOut = b.checkOutDate === cell.dateStr;
 
-                    let badgeStyle = { background: 'var(--blue-bg)', color: '#1864ab', border: '1px solid var(--blue-border)' };
+                    let badgeStyle = { background: 'var(--blue-bg)', color: '#2c5784', border: '1px solid var(--blue-border)' };
                     let prefix = '🛌';
                     if (isCheckIn) {
-                      badgeStyle = { background: 'var(--green-bg)', color: '#087f5b', border: '1px solid var(--green-border)' };
+                      badgeStyle = { background: 'var(--green-bg)', color: '#1d6a49', border: '1px solid var(--green-border)' };
                       prefix = '📥';
                     } else if (isCheckOut) {
-                      badgeStyle = { background: 'var(--red-bg)', color: '#c92a2a', border: '1px solid var(--red-border)' };
+                      badgeStyle = { background: 'var(--red-bg)', color: '#9a3026', border: '1px solid var(--red-border)' };
                       prefix = '📤';
                     }
 
@@ -285,10 +285,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-xs pt-2" style={{ borderTop: '1px solid var(--border-light)' }}>
-                      <div className="font-semibold flex items-center gap-1" style={{ color: '#087f5b' }}>
+                      <div className="font-semibold flex items-center gap-1" style={{ color: '#1d6a49' }}>
                         <LogIn className="w-3.5 h-3.5" /> In: {formatDateThai(b.checkInDate)} ({b.checkInTime})
                       </div>
-                      <div className="font-semibold flex items-center gap-1" style={{ color: '#c92a2a' }}>
+                      <div className="font-semibold flex items-center gap-1" style={{ color: '#9a3026' }}>
                         <LogOut className="w-3.5 h-3.5" /> Out: {formatDateThai(b.checkOutDate)} ({b.checkOutTime})
                       </div>
                     </div>
@@ -305,7 +305,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                           onEditBooking(b);
                         }}
                         className="text-xs font-semibold flex items-center gap-0.5 px-3 py-1 rounded-lg transition"
-                        style={{ background: 'var(--brand-light)', color: 'var(--brand)', border: '1px solid #c5d0fa' }}
+                        style={{ background: 'var(--brand-light)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}
                       >
                         แก้ไขข้อมูล <ChevronRight className="w-3.5 h-3.5" />
                       </button>

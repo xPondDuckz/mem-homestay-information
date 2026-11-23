@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import type { BookingRecord, TaxInvoiceItem } from '../types/booking';
 import { thaiBahtText } from '../utils/thaiBaht';
 import { formatDateThai } from '../utils/formatters';
-import { X, Printer, Plus, Trash2, FileText, Building2 } from 'lucide-react';
+import { X, Printer, Plus, Trash2, Building2, ChevronDown } from 'lucide-react';
+import { DocHeader, DocSignature } from './DocParts';
 
 interface OfficialTaxInvoiceModalProps {
   isOpen: boolean;
@@ -155,455 +156,209 @@ export const OfficialTaxInvoiceModal: React.FC<OfficialTaxInvoiceModalProps> = (
     }
   };
 
+  // Save edits whenever the document is closed, not only on print.
+  const close = () => { handleSaveState(); onClose(); };
+
+  const money = (n: number) => n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const isTax = docType === 'tax_invoice';
+  const title = isTax ? 'ใบกำกับภาษี / ใบเสร็จรับเงิน' : 'บิลเงินสด';
+  const titleEn = isTax ? 'Tax Invoice / Receipt' : 'Cash Sale';
+
+  const ctlInput = 'glass-input w-full h-10 px-3 text-sm';
+  const ctlLabel = 'block text-xs mb-1.5 text-[var(--text-muted)]';
+
   const receiptContent = (
-    <>
-      {/* ── Global Print Styles for Perfect Single Page A4 Fit ── */}
-      <style>{`
-        @media print {
-          @page {
-            size: A4 portrait;
-            margin: 0mm !important;
-          }
-          html, body {
-            background: #ffffff !important;
-            margin: 0mm !important;
-            padding: 0mm !important;
-            font-family: 'Prompt', 'Inter', sans-serif !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          body.print-receipt-mode #root {
-            display: none !important;
-          }
-          body.print-receipt-mode .receipt-print-portal {
-            display: block !important;
-          }
-          .tax-modal-overlay {
-            position: static !important;
-            background: transparent !important;
-            backdrop-filter: none !important;
-            display: block !important;
-            padding: 0 !important;
-            margin: 0 !important;
-          }
-          .tax-modal-card {
-            box-shadow: none !important;
-            border: 2px solid #1e3a8a !important;
-            border-radius: 12px !important;
-            max-height: none !important;
-            overflow: visible !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            page-break-inside: avoid !important;
-            page-break-after: avoid !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-          .tax-scroll-body {
-            overflow: visible !important;
-            max-height: none !important;
-            padding: 8mm 10mm !important;
-          }
-          .print-border-blue {
-            border-color: #1d4ed8 !important;
-          }
-          .print-bg-blue {
-            background-color: #1e40af !important;
-            color: #ffffff !important;
-          }
-          input, textarea {
-            border: none !important;
-            background: transparent !important;
-            padding: 0 !important;
-          }
-        }
-      `}</style>
+    <div className="receipt-print-portal" style={{ display: 'contents' }}>
+      <div
+        className="doc-overlay modal-overlay fixed inset-0 z-[9999] flex items-start sm:items-center justify-center sm:p-4 animate-fade-in overflow-y-auto"
+        onClick={(e) => { if (e.target === e.currentTarget) close(); }}
+      >
+        <div className="doc-shell w-full sm:max-w-[860px] min-h-[100dvh] sm:min-h-0 sm:max-h-[96vh] flex flex-col overflow-hidden sm:rounded-[20px] shadow-[var(--shadow-lg)] animate-scale-in">
 
-      <div className="receipt-print-portal" style={{ display: 'contents' }}>
-        {/* Screen Modal Overlay */}
-        <div
-          className="tax-modal-overlay fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in overflow-y-auto"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) onClose();
-          }}
-        >
-          {/* Main Printable Card */}
-          <div className="tax-modal-card bg-white rounded-3xl shadow-2xl border-2 border-slate-300 max-w-3xl w-full max-h-[96vh] flex flex-col overflow-hidden my-2">
-
-            {/* ── Action Control Bar (Hidden on Print) ── */}
-            <div className="no-print bg-slate-900 text-white px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 shrink-0 border-b border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-blue-600 text-white font-black">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-black text-white">ออกบิลเงินสด / ใบกำกับภาษี (สำหรับเบิกบริษัท)</h2>
-                  <p className="text-[11px] text-slate-400 font-medium">
-                    แบบฟอร์มทางการ • ออกแบบพอดีกระดาษ A4 1 แผ่น
-                  </p>
-                </div>
+          {/* ── Toolbar ── */}
+          <div className="doc-toolbar no-print relative px-4 sm:px-6 py-4 shrink-0 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{title}</h2>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>แก้ไขข้อมูลบนเอกสารได้โดยตรง · พิมพ์ A4 1 หน้า</p>
               </div>
-
-              <div className="flex items-center gap-2">
-                <select
-                  value={docType}
-                  onChange={(e) => setDocType(e.target.value as any)}
-                  className="bg-slate-800 text-amber-400 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold focus:outline-none cursor-pointer"
-                >
-                  <option value="cash_sale">📄 บิลเงินสด (CASH SALE)</option>
-                  <option value="tax_invoice">🧾 ใบกำกับภาษี / ใบเสร็จรับเงิน (TAX INVOICE)</option>
-                </select>
-
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
-                  onClick={() => {
-                    handleSaveState();
-                    handlePrint();
-                  }}
-                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-black px-4 py-2 rounded-xl text-xs shadow-md transition-all active:scale-95 cursor-pointer"
+                  onClick={() => { handleSaveState(); handlePrint(); }}
+                  className="btn-primary h-10 px-4 rounded-xl inline-flex items-center gap-2 text-sm"
                 >
                   <Printer className="w-4 h-4" />
-                  พิมพ์บิล / PDF (A4)
+                  <span className="hidden sm:inline">พิมพ์ / PDF</span>
+                  <span className="sm:hidden">พิมพ์</span>
                 </button>
-
-                <button
-                  onClick={onClose}
-                  className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
-                >
+                <button onClick={close} aria-label="ปิด" className="icon-btn">
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* ── Form Controls Panel (Hidden on Print) ── */}
-            <div className="no-print bg-blue-50/80 border-b border-blue-200 px-5 py-3 space-y-2.5 text-xs">
-              <div className="flex items-center justify-between font-bold text-blue-900">
-                <span className="flex items-center gap-1.5">
-                  <Building2 className="w-4 h-4 text-blue-600" /> ข้อมูลสำหรับการเบิกบริษัท (แก้ไขก่อนพิมพ์ได้)
-                </span>
-                <span className="text-[11px] text-blue-700 font-medium">* ข้อมูลจะพิมพ์ลงในบิล A4 อัตโนมัติ</span>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <div className="segmented sm:w-[300px]" style={{ '--count': 2, '--index': isTax ? 1 : 0 } as React.CSSProperties}>
+                <span className="segmented-thumb" aria-hidden />
+                {([['cash_sale', 'บิลเงินสด'], ['tax_invoice', 'ใบกำกับภาษี']] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setDocType(k)} aria-current={docType === k ? 'page' : undefined} className="segmented-btn">{l}</button>
+                ))}
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-600 block">ชื่อบริษัท / องค์กรที่ขอเบิก:</label>
-                  <input
-                    type="text"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    placeholder="เช่น บริษัท เอสซีจี จำกัด (มหาชน)"
-                    className="w-full px-2.5 py-1.5 bg-white border border-blue-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
+              <details className="group sm:ml-auto">
+                <summary className="list-none cursor-pointer select-none h-10 px-3 rounded-xl inline-flex items-center gap-2 text-sm btn-ghost">
+                  <Building2 className="w-4 h-4" />
+                  ข้อมูลบริษัท &amp; ภาษี
+                  <ChevronDown className="w-4 h-4 transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-6 gap-3 sm:absolute sm:left-6 sm:right-6 sm:z-10 sm:p-4 sm:rounded-2xl sm:bg-white sm:border sm:border-[var(--border-light)] sm:shadow-[var(--shadow-md)] animate-rise">
+                  <label className="sm:col-span-3"><span className={ctlLabel}>ชื่อบริษัท / องค์กร</span>
+                    <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="เช่น บริษัท ตัวอย่าง จำกัด" className={ctlInput} />
+                  </label>
+                  <label className="sm:col-span-3"><span className={ctlLabel}>เลขประจำตัวผู้เสียภาษี 13 หลัก</span>
+                    <input value={taxId} onChange={(e) => setTaxId(e.target.value)} inputMode="numeric" placeholder="0000000000000" className={`${ctlInput} tabular-nums`} />
+                  </label>
+                  <label className="sm:col-span-4"><span className={ctlLabel}>ที่อยู่สำหรับออกบิล</span>
+                    <input value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} placeholder="เลขที่ ถนน ตำบล อำเภอ จังหวัด รหัสไปรษณีย์" className={ctlInput} />
+                  </label>
+                  <label className="sm:col-span-2"><span className={ctlLabel}>ผู้รับเงิน</span>
+                    <input value={collectorName} onChange={(e) => setCollectorName(e.target.value)} className={ctlInput} />
+                  </label>
+                  <label className="sm:col-span-3"><span className={ctlLabel}>ภาษีมูลค่าเพิ่ม (VAT)</span>
+                    <select value={vatRate} onChange={(e) => setVatRate(Number(e.target.value))} className={`${ctlInput} cursor-pointer`}>
+                      <option value={0}>ไม่คิด VAT</option>
+                      <option value={7}>VAT 7%</option>
+                    </select>
+                  </label>
+                  <label className="sm:col-span-3"><span className={ctlLabel}>หัก ณ ที่จ่าย</span>
+                    <select value={withholdingTaxRate} onChange={(e) => setWithholdingTaxRate(Number(e.target.value))} className={`${ctlInput} cursor-pointer`}>
+                      <option value={0}>ไม่หัก</option>
+                      <option value={1}>หัก 1%</option>
+                      <option value={3}>หัก 3%</option>
+                    </select>
+                  </label>
                 </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-600 block">เลขประจำตัวผู้เสียภาษีอากร 13 หลัก:</label>
-                  <input
-                    type="text"
-                    value={taxId}
-                    onChange={(e) => setTaxId(e.target.value)}
-                    placeholder="เช่น 0105558012345"
-                    className="w-full px-2.5 py-1.5 bg-white border border-blue-300 rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <div className="sm:col-span-2">
-                  <label className="text-[10px] font-bold text-slate-600 block">ที่อยู่สำหรับออกบิล/บริษัท:</label>
-                  <input
-                    type="text"
-                    value={customerAddress}
-                    onChange={(e) => setCustomerAddress(e.target.value)}
-                    placeholder="เช่น 181 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110"
-                    className="w-full px-2.5 py-1.5 bg-white border border-blue-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold text-slate-600 block">ชื่อผู้รับเงิน / ออกบิล:</label>
-                  <input
-                    type="text"
-                    value={collectorName}
-                    onChange={(e) => setCollectorName(e.target.value)}
-                    placeholder="เช่น ผู้จัดการ เมม โฮมสเตย์"
-                    className="w-full px-2.5 py-1.5 bg-white border border-blue-300 rounded-lg text-xs font-bold text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
+              </details>
             </div>
+          </div>
 
-            {/* ── PRINTABLE A4 SHEET CONTENT ── */}
-            <div className="tax-scroll-body p-6 sm:p-8 overflow-y-auto flex-1 bg-white text-slate-900 space-y-4 font-sans">
+          {/* ── Paper ── */}
+          <div className="doc-scroll flex-1 overflow-y-auto p-3 sm:p-8">
+            <div key={docType} className="doc-paper mx-auto w-full max-w-[794px] px-5 py-7 sm:px-12 sm:py-11 animate-rise">
 
-              {/* 1. SHOP EXECUTIVE HEADER */}
-              <div className="flex items-start justify-between gap-4 border-b-2 border-blue-900 pb-3">
-                {/* Shop logo & address info */}
-                <div className="space-y-1">
-                  <h1 className="text-2xl font-black text-blue-950 tracking-tight leading-tight flex items-center gap-2">
-                    Mem Homestay
-                    <span className="text-xs font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-                      เมม โฮมสเตย์
-                    </span>
-                  </h1>
-                  <p className="text-xs font-bold text-slate-700 leading-normal">
-                    181 หมู่ 6 ตำบลชุมโค อำเภอปะทิว จังหวัดชุมพร 86160
-                  </p>
-                  <p className="text-xs font-extrabold text-blue-900">
-                    โทร. 087-8939131
-                  </p>
-                </div>
+              <DocHeader title={title} titleEn={titleEn} />
 
-                {/* Book No & Bill No box */}
-                <div className="text-right space-y-1.5 shrink-0 pt-1">
-                  <div className="flex items-center justify-end gap-2 text-xs font-bold text-slate-800">
-                    <span>เล่มที่ <span className="text-[10px] text-slate-500 font-mono uppercase">BOOK NO.</span></span>
+              {/* Customer + meta */}
+              <section className="mt-7 grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-x-10 gap-y-4">
+                <div className="space-y-3">
+                  <div>
+                    <span className="doc-label">ลูกค้า<em>Customer</em></span>
                     <input
-                      type="text"
-                      value={bookNo}
-                      onChange={(e) => setBookNo(e.target.value)}
-                      className="w-20 px-2 py-1 border border-slate-300 rounded text-center font-mono font-black text-xs text-slate-900 focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 text-xs font-bold text-slate-800">
-                    <span>เลขที่ <span className="text-[10px] text-slate-500 font-mono uppercase">BILL NO.</span></span>
-                    <input
-                      type="text"
-                      value={billNo}
-                      onChange={(e) => setBillNo(e.target.value)}
-                      className="w-32 px-2 py-1 border border-slate-300 rounded text-center font-mono font-black text-xs text-blue-900 focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* 2. TITLE BANNER */}
-              <div className="bg-blue-900 text-white text-center py-2.5 px-4 rounded-lg shadow-sm print-bg-blue">
-                <h2 className="text-lg font-black tracking-wide flex items-center justify-center gap-2">
-                  {docType === 'cash_sale' ? (
-                    <>
-                      <span>บิลเงินสด</span>
-                      <span className="text-xs font-bold opacity-90 font-mono">CASH SALE</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>ใบกำกับภาษี / ใบเสร็จรับเงิน</span>
-                      <span className="text-xs font-bold opacity-90 font-mono">TAX INVOICE / RECEIPT</span>
-                    </>
-                  )}
-                </h2>
-              </div>
-
-              {/* 3. CUSTOMER DETAILS GRID */}
-              <div className="border border-slate-300 rounded-xl p-3.5 text-xs space-y-2.5 bg-slate-50/50">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2 flex items-center gap-2">
-                    <span className="font-bold text-slate-800 shrink-0">
-                      นาม <span className="text-[10px] text-slate-500 font-mono">CUSTOMER</span>:
-                    </span>
-                    <input
-                      type="text"
                       value={companyName || customerName}
-                      onChange={(e) => {
-                        if (companyName) setCompanyName(e.target.value);
-                        else setCustomerName(e.target.value);
-                      }}
-                      className="w-full border-b border-dotted border-slate-400 font-black text-slate-950 px-1 py-0.5 focus:outline-none focus:border-blue-600"
+                      onChange={(e) => (companyName ? setCompanyName(e.target.value) : setCustomerName(e.target.value))}
+                      className="doc-field text-[15px] font-semibold"
                     />
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-800 shrink-0">
-                      วันที่ <span className="text-[10px] text-slate-500 font-mono">DATE</span>:
-                    </span>
-                    <input
-                      type="date"
-                      value={issueDate}
-                      onChange={(e) => setIssueDate(e.target.value)}
-                      className="w-full border-b border-dotted border-slate-400 font-bold text-slate-900 px-1 py-0.5 focus:outline-none focus:border-blue-600"
-                    />
+                  <div>
+                    <span className="doc-label">ที่อยู่<em>Address</em></span>
+                    <input value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} placeholder="ระบุที่อยู่ลูกค้า / บริษัท" className="doc-field" />
+                  </div>
+                  <div>
+                    <span className="doc-label">เลขประจำตัวผู้เสียภาษี<em>Tax ID</em></span>
+                    <input value={taxId} onChange={(e) => setTaxId(e.target.value)} placeholder="—" className="doc-field tabular-nums tracking-wider" />
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-800 shrink-0">
-                    ที่อยู่ <span className="text-[10px] text-slate-500 font-mono">ADDRESS</span>:
-                  </span>
-                  <input
-                    type="text"
-                    value={customerAddress}
-                    onChange={(e) => setCustomerAddress(e.target.value)}
-                    placeholder="ระบุที่อยู่ลูกค้า / บริษัทสำหรับเบิก"
-                    className="w-full border-b border-dotted border-slate-400 font-semibold text-slate-900 px-1 py-0.5 focus:outline-none focus:border-blue-600"
-                  />
-                </div>
+                <dl className="space-y-3">
+                  <div>
+                    <dt className="doc-label">เลขที่<em>No.</em></dt>
+                    <dd><input value={billNo} onChange={(e) => setBillNo(e.target.value)} className="doc-field tabular-nums font-medium" /></dd>
+                  </div>
+                  <div>
+                    <dt className="doc-label">เล่มที่<em>Book</em></dt>
+                    <dd><input value={bookNo} onChange={(e) => setBookNo(e.target.value)} className="doc-field tabular-nums" /></dd>
+                  </div>
+                  <div>
+                    <dt className="doc-label">วันที่<em>Date</em></dt>
+                    <dd>
+                      <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} className="doc-field doc-screen-only" />
+                      <span className="doc-print-only">{formatDateThai(issueDate)}</span>
+                    </dd>
+                  </div>
+                </dl>
+              </section>
 
-                {/* Tax ID Prominent Line for Corporate Reimbursements */}
-                <div className="flex items-center gap-2 pt-0.5">
-                  <span className="font-bold text-slate-800 shrink-0">
-                    เลขประจำตัวผู้เสียภาษีอากร <span className="text-[10px] text-slate-500 font-mono">TAX IDENTIFICATION NO.</span>:
-                  </span>
-                  <input
-                    type="text"
-                    value={taxId}
-                    onChange={(e) => setTaxId(e.target.value)}
-                    placeholder="ระบุเลขประจำตัวผู้เสียภาษีอากร 13 หลัก"
-                    className="w-full border-b border-dotted border-slate-400 font-mono font-bold text-blue-900 px-1 py-0.5 focus:outline-none focus:border-blue-600 tracking-wider text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* 4. ITEMS TABLE */}
-              <div className="border border-slate-400 rounded-xl overflow-hidden shadow-sm">
-                <table className="w-full text-left border-collapse text-xs">
+              {/* Items */}
+              <section className="mt-8">
+                <table className="doc-table w-full border-collapse">
                   <thead>
-                    <tr className="bg-blue-900 text-white font-bold border-b border-blue-950 text-[11px] print-bg-blue">
-                      <th className="py-2.5 px-3 text-center border-r border-blue-700 w-16">
-                        จำนวน<br />
-                        <span className="text-[9px] font-mono font-normal">QTY</span>
-                      </th>
-                      <th className="py-2.5 px-3 border-r border-blue-700">
-                        รายการ<br />
-                        <span className="text-[9px] font-mono font-normal">DESCRIPTION</span>
-                      </th>
-                      <th className="py-2.5 px-3 text-right border-r border-blue-700 w-28">
-                        หน่วยละ<br />
-                        <span className="text-[9px] font-mono font-normal">UNIT PRICE</span>
-                      </th>
-                      <th className="py-2.5 px-3 text-right w-36">
-                        จำนวนเงิน<br />
-                        <span className="text-[9px] font-mono font-normal">AMOUNT (THB)</span>
-                      </th>
-                      <th className="no-print py-2.5 px-2 text-center w-10"></th>
+                    <tr>
+                      <th className="py-2 pr-3 w-14">จำนวน</th>
+                      <th className="py-2 px-3">รายการ</th>
+                      <th className="py-2 px-3 w-28 !text-right">หน่วยละ</th>
+                      <th className="py-2 pl-3 w-32 !text-right">จำนวนเงิน</th>
+                      <th className="no-print w-8" />
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-300 text-slate-900">
+                  <tbody>
                     {items.map((item) => (
-                      <tr key={item.id} className="hover:bg-slate-50">
-                        {/* Quantity */}
-                        <td className="py-2.5 px-2 text-center border-r border-slate-300">
-                          <input
-                            type="number"
-                            min="1"
-                            value={item.quantity}
-                            onChange={(e) => handleUpdateItem(item.id, 'quantity', e.target.value)}
-                            className="w-full text-center font-bold text-slate-900 focus:outline-none"
-                          />
+                      <tr key={item.id} className="align-top">
+                        <td className="py-3 pr-3">
+                          <input type="number" min="1" value={item.quantity} onChange={(e) => handleUpdateItem(item.id, 'quantity', e.target.value)} className="doc-field tabular-nums" />
                         </td>
-
-                        {/* Description - Auto Wrapping Multiline Textarea */}
-                        <td className="py-2 px-3 border-r border-slate-300">
-                          <textarea
-                            value={item.description}
-                            onChange={(e) => handleUpdateItem(item.id, 'description', e.target.value)}
-                            rows={2}
-                            className="w-full font-bold text-slate-900 focus:outline-none bg-transparent resize-none leading-relaxed py-1 text-xs block"
-                          />
+                        <td className="py-3 px-3">
+                          <textarea value={item.description} onChange={(e) => handleUpdateItem(item.id, 'description', e.target.value)} rows={2} className="doc-field resize-none block" />
                         </td>
-
-                        {/* Unit Price */}
-                        <td className="py-2.5 px-3 text-right border-r border-slate-300">
-                          <input
-                            type="number"
-                            value={item.unitPrice}
-                            onChange={(e) => handleUpdateItem(item.id, 'unitPrice', e.target.value)}
-                            className="w-full text-right font-mono font-bold text-slate-900 focus:outline-none"
-                          />
+                        <td className="py-3 px-3">
+                          <input type="number" value={item.unitPrice} onChange={(e) => handleUpdateItem(item.id, 'unitPrice', e.target.value)} className="doc-field text-right tabular-nums" />
                         </td>
-
-                        {/* Amount */}
-                        <td className="py-2.5 px-3 text-right font-mono font-black text-slate-950 text-sm">
-                          ฿{item.amount.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-                        </td>
-
-                        {/* Remove item button (no print) */}
-                        <td className="no-print py-2.5 px-1 text-center">
+                        <td className="py-3 pl-3 text-right tabular-nums whitespace-nowrap pt-[14px]">{money(item.amount)}</td>
+                        <td className="no-print py-3 text-right">
                           {items.length > 1 && (
-                            <button
-                              onClick={() => handleRemoveItem(item.id)}
-                              className="text-rose-500 hover:text-rose-700 p-1 rounded"
-                              title="ลบรายการ"
-                            >
+                            <button onClick={() => handleRemoveItem(item.id)} title="ลบรายการ" className="row-del action-btn action-btn-delete !w-7 !h-7">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           )}
                         </td>
                       </tr>
                     ))}
-
-                    {/* Minimum rows filler so receipt looks complete like real paper pad */}
-                    {Array.from({ length: Math.max(0, 4 - items.length) }).map((_, i) => (
-                      <tr key={`empty-${i}`} className="h-10">
-                        <td className="border-r border-slate-300"></td>
-                        <td className="border-r border-slate-300"></td>
-                        <td className="border-r border-slate-300"></td>
-                        <td></td>
-                        <td className="no-print"></td>
-                      </tr>
+                    {Array.from({ length: Math.max(0, 3 - items.length) }).map((_, i) => (
+                      <tr key={`empty-${i}`} className="h-11"><td /><td /><td /><td /><td className="no-print" /></tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
 
-              {/* Add row button (no print) */}
-              <div className="no-print flex items-center justify-between pt-1">
-                <button
-                  onClick={handleAddItem}
-                  className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-blue-900 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-300 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" /> เพิ่มรายการสินค้า/บริการ
+                <button onClick={handleAddItem} className="no-print mt-3 h-9 px-3 rounded-lg inline-flex items-center gap-1.5 text-sm transition-colors hover:bg-[var(--brand-light)]" style={{ color: 'var(--brand)' }}>
+                  <Plus className="w-4 h-4" /> เพิ่มรายการ
                 </button>
-              </div>
+              </section>
 
-              {/* 5. SUMMARY & THAI BAHT TEXT */}
-              <div className="border border-slate-400 rounded-xl p-3.5 grid grid-cols-1 sm:grid-cols-3 gap-3 items-center bg-slate-50/60">
-                {/* Baht Text Box (บาท BAHT) */}
-                <div className="sm:col-span-2 border-r-0 sm:border-r border-slate-300 pr-0 sm:pr-3 space-y-1">
-                  <div className="text-xs font-bold text-slate-700 flex items-center gap-2">
-                    <span>บาท <span className="text-[10px] font-mono text-slate-500">BAHT</span>:</span>
-                    <strong className="text-blue-950 text-sm font-black tracking-tight">{bahtText}</strong>
-                  </div>
-                  <p className="text-[10px] text-slate-500 font-medium leading-tight">
-                    * ยอดเงินตัวอักษรคำนวณตามหลักภาษีสรรพากรอัตโนมัติ
-                  </p>
+              {/* Totals */}
+              <section className="mt-6 grid grid-cols-1 sm:grid-cols-[1fr_260px] gap-6 items-end">
+                <div>
+                  <span className="doc-label">จำนวนเงิน (ตัวอักษร)</span>
+                  <p className="mt-0.5">{bahtText}</p>
                 </div>
-
-                {/* Total amount box */}
-                <div className="text-right space-y-0.5">
-                  <div className="text-xs font-bold text-slate-700">
-                    รวมเงินสุทธิ <span className="text-[10px] font-mono text-slate-500 uppercase">TOTAL</span>
-                  </div>
-                  <div className="text-2xl font-black text-blue-950 font-mono tracking-tight">
-                    ฿{grandTotal.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <div className="space-y-1.5">
+                  {(vatRate > 0 || withholdingTaxRate > 0) && (
+                    <>
+                      <div className="flex justify-between"><span style={{ color: '#57564f' }}>รวมเป็นเงิน</span><span className="tabular-nums">{money(subtotal)}</span></div>
+                      {vatRate > 0 && <div className="flex justify-between"><span style={{ color: '#57564f' }}>ภาษีมูลค่าเพิ่ม {vatRate}%</span><span className="tabular-nums">{money(vatAmount)}</span></div>}
+                      {withholdingTaxRate > 0 && <div className="flex justify-between"><span style={{ color: '#57564f' }}>หัก ณ ที่จ่าย {withholdingTaxRate}%</span><span className="tabular-nums">−{money(withholdingTaxAmount)}</span></div>}
+                    </>
+                  )}
+                  <div className="flex items-baseline justify-between pt-2.5 mt-1" style={{ borderTop: '1.5px solid #1b1b19' }}>
+                    <span className="font-medium">รวมทั้งสิ้น</span>
+                    <span className="text-[22px] font-semibold tabular-nums">฿{money(grandTotal)}</span>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              {/* 6. SIGNATURE SECTION */}
-              <div className="pt-6 flex items-center justify-between text-xs border-t border-slate-300">
-                <div className="text-[11px] text-slate-600 space-y-1">
-                  <p className="font-bold text-slate-800 text-xs">ขอบคุณที่เลือกใช้บริการ / Thank you for your stay</p>
-                  <p className="font-semibold text-slate-600">Mem Homestay (เมม โฮมสเตย์)</p>
-                </div>
-
-                <div className="text-center space-y-1.5 min-w-[220px]">
-                  <div className="border-b-2 border-slate-800 w-48 mx-auto pb-1 font-bold text-slate-900">
-                    {collectorName || '________________________'}
-                  </div>
-                  <div className="text-[11px] font-bold text-slate-800">
-                    ผู้รับเงิน <span className="text-[10px] font-mono text-slate-500 uppercase">COLLECTOR</span>
-                  </div>
-                </div>
-              </div>
-
+              <DocSignature name={collectorName} role="ผู้รับเงิน" />
             </div>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 
   return createPortal(receiptContent, document.body);

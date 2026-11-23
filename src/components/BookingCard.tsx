@@ -1,7 +1,9 @@
 import React from 'react';
 import type { BookingRecord } from '../types/booking';
-import { Globe, Footprints, BedDouble, BedSingle, Phone, Calendar, Clock, Edit2, Trash2, Tag, Printer, FileText } from 'lucide-react';
+import type { Language } from '../utils/translations';
+import { Phone, Pencil, Trash2, Printer, FileText, StickyNote, ArrowRight } from 'lucide-react';
 import { formatDateThai, cleanTimeStr } from '../utils/formatters';
+import { StatusBadge, QuickStatusButton, RoomLabel } from './BookingTable';
 
 interface BookingCardProps {
   booking: BookingRecord;
@@ -11,173 +13,78 @@ interface BookingCardProps {
   onPrintReceipt?: (booking: BookingRecord) => void;
   onPrintTaxInvoice?: (booking: BookingRecord) => void;
   t: any;
+  lang: Language;
   index?: number;
 }
 
-const STATUS_CONFIG: Record<string, { badgeCls: string; leftColor: string; label: (t: any) => string }> = {
-  confirmed:   { badgeCls: 'badge badge-confirmed',   leftColor: 'var(--green)', label: (t) => t.statusConfirmed },
-  checked_in:  { badgeCls: 'badge badge-checked_in',  leftColor: 'var(--blue)',  label: (t) => t.statusCheckedIn },
-  checked_out: { badgeCls: 'badge badge-checked_out', leftColor: '#adb5bd',      label: (t) => t.statusCheckedOut },
-  cancelled:   { badgeCls: 'badge badge-cancelled',   leftColor: 'var(--red)',   label: (t) => t.statusCancelled },
-};
-
 export const BookingCard: React.FC<BookingCardProps> = ({
-  booking, onEdit, onDelete, onQuickUpdateStatus, onPrintReceipt, onPrintTaxInvoice, t, index = 0
-}) => {
-  const cfg = STATUS_CONFIG[booking.status] ?? STATUS_CONFIG.confirmed;
-  const delays = ['delay-0','delay-75','delay-150','delay-225','delay-300','delay-375','delay-450'];
-
-  return (
-    <div
-      className={`rounded-2xl p-4 space-y-3.5 animate-slide-left ${delays[Math.min(index, 6)]} transition-all duration-200 hover:shadow-sm`}
-      style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border-light)',
-        borderLeftWidth: '3px',
-        borderLeftColor: cfg.leftColor,
-        boxShadow: 'var(--shadow-xs)',
-      }}
-    >
-      {/* Name + Status */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          {/* Date replaces booking ID */}
-          <span className="text-[11px] font-medium block mb-0.5" style={{ color: 'var(--text-muted)' }}>
-            {formatDateThai(booking.createdAt)}
-          </span>
-          <h3 className="font-semibold text-base leading-tight truncate" style={{ color: 'var(--text-primary)' }}>
-            {booking.customerName}
-          </h3>
-          <div className="flex items-center gap-1.5 text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            <Phone className="w-3 h-3 shrink-0" />
-            <span>{booking.phoneNumber}</span>
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-1.5 shrink-0">
-          <span className={cfg.badgeCls}>{cfg.label(t)}</span>
-          {onQuickUpdateStatus && booking.status === 'confirmed' && (
-            <button
-              onClick={() => onQuickUpdateStatus(booking.id, 'checked_in')}
-              className="text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 shadow-xs"
-              style={{ background: '#e6fcf5', border: '1px solid #c3fae8', color: '#087f5b' }}
-            >
-              📥 เช็คอินเลย
-            </button>
-          )}
-          {onQuickUpdateStatus && booking.status === 'checked_in' && (
-            <button
-              onClick={() => onQuickUpdateStatus(booking.id, 'checked_out')}
-              className="text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 shadow-xs"
-              style={{ background: '#fff5f5', border: '1px solid #ffc9c9', color: '#c92a2a' }}
-            >
-              🚪 เช็คเอาท์
-            </button>
-          )}
-        </div>
+  booking: b, onEdit, onDelete, onQuickUpdateStatus, onPrintReceipt, onPrintTaxInvoice, t, lang, index = 0,
+}) => (
+  <article
+    className={`card lift p-4 flex flex-col gap-3.5 animate-rise stagger ${b.status === 'cancelled' ? 'opacity-60' : ''}`}
+    style={{ '--i': index } as React.CSSProperties}
+  >
+    {/* Head: tap to edit */}
+    <button onClick={() => onEdit(b)} className="flex items-start justify-between gap-3 text-left -m-1 p-1 rounded-xl">
+      <div className="min-w-0">
+        <h3 className="font-semibold text-base leading-snug truncate" style={{ color: 'var(--text-primary)' }}>{b.customerName}</h3>
+        <p className="text-[13px] flex items-center gap-1.5 mt-0.5 tabular" style={{ color: 'var(--text-muted)' }}>
+          <Phone className="w-3 h-3" />{b.phoneNumber}
+        </p>
       </div>
+      <StatusBadge status={b.status} t={t} />
+    </button>
 
-      {/* Channel + Bed */}
-      <div className="flex flex-wrap gap-1.5">
-        {booking.bookingChannel === 'booking_com'
-          ? <span className="badge badge-booking"><Globe className="w-3 h-3" />Booking.com</span>
-          : <span className="badge badge-walkin"><Footprints className="w-3 h-3" />Walk-in</span>
-        }
-        {booking.bedType === 'big'   && <span className="badge badge-bed-big"><BedDouble className="w-3 h-3" />{t.bedBig}</span>}
-        {booking.bedType === 'small' && <span className="badge badge-bed-small"><BedSingle className="w-3 h-3" />{t.bedSmall}</span>}
-        {booking.bedType === 'both'  && <span className="badge badge-bed-both"><BedDouble className="w-3 h-3" />{t.bedBoth}</span>}
+    {/* Stay */}
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl px-3.5 py-2.5" style={{ background: 'var(--bg-muted)' }}>
+      <div>
+        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Check-in</p>
+        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{formatDateThai(b.checkInDate)}</p>
+        <p className="text-xs tabular" style={{ color: 'var(--text-muted)' }}>{cleanTimeStr(b.checkInTime)}</p>
       </div>
-
-      {/* Dates */}
-      <div
-        className="grid grid-cols-2 gap-3 p-3 rounded-xl text-xs"
-        style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}
-      >
-        <div>
-          <span className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: 'var(--green)' }}>
-            Check-in
-          </span>
-          <span className="font-semibold flex items-center gap-1.5" style={{ color: '#087f5b' }}>
-            <Calendar className="w-3 h-3 shrink-0" />
-            {formatDateThai(booking.checkInDate)}
-          </span>
-          <span className="flex items-center gap-1 text-[10px] mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }}>
-            <Clock className="w-2.5 h-2.5" />{cleanTimeStr(booking.checkInTime)}
-          </span>
-        </div>
-        <div>
-          <span className="text-[10px] font-bold uppercase tracking-wider block mb-1" style={{ color: 'var(--red)' }}>
-            Check-out
-          </span>
-          <span className="font-semibold flex items-center gap-1.5" style={{ color: '#c92a2a' }}>
-            <Calendar className="w-3 h-3 shrink-0" />
-            {formatDateThai(booking.checkOutDate)}
-          </span>
-          <span className="flex items-center gap-1 text-[10px] mt-0.5 font-mono" style={{ color: 'var(--text-muted)' }}>
-            <Clock className="w-2.5 h-2.5" />{cleanTimeStr(booking.checkOutTime)}
-          </span>
-        </div>
+      <ArrowRight className="w-4 h-4" style={{ color: 'var(--border-strong)' }} />
+      <div className="text-right">
+        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Check-out</p>
+        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{formatDateThai(b.checkOutDate)}</p>
+        <p className="text-xs tabular" style={{ color: 'var(--text-muted)' }}>{cleanTimeStr(b.checkOutTime)}</p>
       </div>
-
-      {/* Price + Actions */}
-      <div className="flex items-center justify-between">
-        <div>
-          <span className="text-[10px] font-medium block mb-0.5" style={{ color: 'var(--text-muted)' }}>{t.colPrice}</span>
-          <span className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>฿{booking.price.toLocaleString()}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {onPrintReceipt && (
-            <button
-              id={`card-print-${booking.id}`}
-              onClick={() => onPrintReceipt(booking)}
-              className="action-btn action-btn-print"
-              style={{ width: 38, height: 38 }}
-              title="พิมพ์ใบยืนยัน"
-            >
-              <Printer className="w-4 h-4" style={{ color: 'var(--green)' }} />
-            </button>
-          )}
-          {onPrintTaxInvoice && (
-            <button
-              id={`card-tax-invoice-${booking.id}`}
-              onClick={() => onPrintTaxInvoice(booking)}
-              className="action-btn action-btn-tax"
-              style={{ width: 38, height: 38 }}
-              title="ใบกำกับภาษี"
-            >
-              <FileText className="w-4 h-4" style={{ color: 'var(--blue)' }} />
-            </button>
-          )}
-          <button
-            id={`card-edit-${booking.id}`}
-            onClick={() => onEdit(booking)}
-            className="action-btn action-btn-edit flex items-center gap-1.5 px-3"
-            style={{ width: 'auto', height: 38 }}
-          >
-            <Edit2 className="w-3.5 h-3.5" style={{ color: 'var(--amber)' }} />
-            <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{t.btnEditLabel}</span>
-          </button>
-          <button
-            id={`card-delete-${booking.id}`}
-            onClick={() => onDelete(booking.id)}
-            className="action-btn action-btn-delete"
-            style={{ width: 38, height: 38 }}
-            title={t.btnDeleteLabel}
-          >
-            <Trash2 className="w-4 h-4" style={{ color: 'var(--red)' }} />
-          </button>
-        </div>
-      </div>
-
-      {/* Notes */}
-      {booking.notes && (
-        <div
-          className="text-xs p-2.5 rounded-xl flex items-start gap-2"
-          style={{ background: 'var(--amber-bg)', border: '1px solid var(--amber-border)' }}
-        >
-          <Tag className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: 'var(--amber)' }} />
-          <span className="italic" style={{ color: 'var(--text-secondary)' }}>{booking.notes}</span>
-        </div>
-      )}
     </div>
-  );
-};
+
+    <div className="flex items-center justify-between gap-3">
+      <RoomLabel booking={b} t={t} />
+      <span className="text-lg font-semibold tabular" style={{ color: 'var(--text-primary)' }}>฿{b.price.toLocaleString()}</span>
+    </div>
+
+    {b.notes && (
+      <p className="text-[13px] flex items-start gap-2" style={{ color: 'var(--text-secondary)' }}>
+        <StickyNote className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+        <span className="line-clamp-2">{b.notes}</span>
+      </p>
+    )}
+
+    {/* Footer actions */}
+    <div className="flex items-center justify-between gap-2 pt-3 mt-auto" style={{ borderTop: '1px solid var(--border-light)' }}>
+      <div className="min-h-8 flex items-center">
+        <QuickStatusButton booking={b} onQuickUpdateStatus={onQuickUpdateStatus} lang={lang} />
+      </div>
+      <div className="flex items-center gap-0.5 -mr-1.5">
+        {onPrintReceipt && (
+          <button id={`card-print-${b.id}`} onClick={() => onPrintReceipt(b)} className="action-btn !w-10 !h-10" aria-label="พิมพ์ใบยืนยัน">
+            <Printer className="w-[18px] h-[18px]" />
+          </button>
+        )}
+        {onPrintTaxInvoice && (
+          <button id={`card-tax-invoice-${b.id}`} onClick={() => onPrintTaxInvoice(b)} className="action-btn !w-10 !h-10" aria-label="ใบกำกับภาษี">
+            <FileText className="w-[18px] h-[18px]" />
+          </button>
+        )}
+        <button id={`card-edit-${b.id}`} onClick={() => onEdit(b)} className="action-btn !w-10 !h-10" aria-label={t.btnEditLabel}>
+          <Pencil className="w-[18px] h-[18px]" />
+        </button>
+        <button id={`card-delete-${b.id}`} onClick={() => onDelete(b.id)} className="action-btn action-btn-delete !w-10 !h-10" aria-label={t.btnDeleteLabel}>
+          <Trash2 className="w-[18px] h-[18px]" />
+        </button>
+      </div>
+    </div>
+  </article>
+);

@@ -4,8 +4,8 @@ import { BookingCard } from './BookingCard';
 import { MonthSelector } from './MonthSelector';
 import type { Language } from '../utils/translations';
 import {
-  Search, Globe, Footprints, BedDouble, BedSingle, ArrowUpDown,
-  Edit2, Trash2, RefreshCw, ChevronDown, ChevronUp, Printer, FileText, SlidersHorizontal
+  Search, Globe, Footprints, BedDouble, BedSingle, ArrowRight,
+  Pencil, Trash2, X, Printer, FileText, SlidersHorizontal, LogIn, LogOut, Inbox,
 } from 'lucide-react';
 import { formatDateThai, cleanTimeStr } from '../utils/formatters';
 
@@ -26,26 +26,61 @@ interface BookingTableProps {
   t: any;
 }
 
-const getStatusBadge = (status: string, t: any) => {
-  const map: Record<string, { cls: string; label: string; dot?: boolean }> = {
-    checked_in:  { cls: 'badge badge-checked_in',  label: t.statusCheckedIn,  dot: true },
-    checked_out: { cls: 'badge badge-checked_out', label: t.statusCheckedOut },
-    cancelled:   { cls: 'badge badge-cancelled',   label: t.statusCancelled },
-    confirmed:   { cls: 'badge badge-confirmed',   label: t.statusConfirmed,  dot: true },
+export const StatusBadge: React.FC<{ status: string; t: any }> = ({ status, t }) => {
+  const label: Record<string, string> = {
+    confirmed: t.statusConfirmed, checked_in: t.statusCheckedIn,
+    checked_out: t.statusCheckedOut, cancelled: t.statusCancelled,
   };
-  const cfg = map[status] ?? map.confirmed;
+  const key = label[status] ? status : 'confirmed';
   return (
-    <span className={cfg.cls}>
-      {cfg.dot && (
-        <span
-          className="w-1.5 h-1.5 rounded-full inline-block shrink-0"
-          style={{ background: status === 'checked_in' ? 'var(--blue)' : 'var(--green)' }}
-        />
-      )}
-      {cfg.label}
+    <span className={`badge badge-${key}`}>
+      <span className="badge-dot" aria-hidden />
+      {label[key]}
     </span>
   );
 };
+
+export const QuickStatusButton: React.FC<{ booking: BookingRecord; onQuickUpdateStatus?: BookingTableProps['onQuickUpdateStatus']; lang: Language }> = ({
+  booking, onQuickUpdateStatus, lang,
+}) => {
+  if (!onQuickUpdateStatus) return null;
+  if (booking.status === 'confirmed') return (
+    <button onClick={() => onQuickUpdateStatus(booking.id, 'checked_in')} className="btn-soft btn-soft-green">
+      <LogIn className="w-3.5 h-3.5" />{lang === 'th' ? 'เช็คอิน' : 'Check in'}
+    </button>
+  );
+  if (booking.status === 'checked_in') return (
+    <button onClick={() => onQuickUpdateStatus(booking.id, 'checked_out')} className="btn-soft btn-soft-red">
+      <LogOut className="w-3.5 h-3.5" />{lang === 'th' ? 'เช็คเอาท์' : 'Check out'}
+    </button>
+  );
+  return null;
+};
+
+export const RoomLabel: React.FC<{ booking: BookingRecord; t: any }> = ({ booking, t }) => {
+  const Bed = booking.bedType === 'small' ? BedSingle : BedDouble;
+  const bed = booking.bedType === 'big' ? t.bedBig : booking.bedType === 'small' ? t.bedSmall : t.bedBoth;
+  const Ch = booking.bookingChannel === 'booking_com' ? Globe : Footprints;
+  return (
+    <span className="inline-flex items-center gap-3 text-[13px] whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+      <span className="inline-flex items-center gap-1.5"><Bed className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />{bed}</span>
+      <span className="inline-flex items-center gap-1.5"><Ch className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />{booking.bookingChannel === 'booking_com' ? 'Booking' : 'Walk-in'}</span>
+    </span>
+  );
+};
+
+const EmptyState: React.FC<{ t: any; onReset?: () => void; filtered: boolean }> = ({ t, onReset, filtered }) => (
+  <div className="py-16 px-6 text-center animate-fade-in">
+    <div className="w-12 h-12 mx-auto mb-4 rounded-2xl flex items-center justify-center" style={{ background: 'var(--bg-muted)' }}>
+      <Inbox className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
+    </div>
+    <p className="font-medium" style={{ color: 'var(--text-primary)' }}>{t.emptyMessageTitle}</p>
+    <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>{t.emptyMessageSub}</p>
+    {filtered && onReset && (
+      <button onClick={onReset} className="mt-4 btn-ghost h-9 px-4 rounded-xl text-sm">{t.resetFilterTitle}</button>
+    )}
+  </div>
+);
 
 export const BookingTable: React.FC<BookingTableProps> = ({
   bookings, filterOptions, onFilterChange, onEdit, onDelete, onQuickUpdateStatus,
@@ -54,403 +89,234 @@ export const BookingTable: React.FC<BookingTableProps> = ({
 }) => {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  const extraFilters = (filterOptions.channel !== 'all' ? 1 : 0) + (filterOptions.bedType !== 'all' ? 1 : 0);
   const hasActiveFilters =
-    filterOptions.searchQuery.trim() !== '' ||
-    filterOptions.channel !== 'all' ||
-    filterOptions.bedType !== 'all' ||
-    filterOptions.status !== 'all';
+    filterOptions.searchQuery.trim() !== '' || extraFilters > 0 || filterOptions.status !== 'all' ||
+    filterOptions.startDate !== '' || filterOptions.endDate !== '';
 
   const statusChips = [
     { key: 'all',         label: t.quickStatusAll || 'ทั้งหมด' },
     { key: 'confirmed',   label: t.quickStatusConfirmed || 'รอเช็คอิน' },
     { key: 'checked_in',  label: t.quickStatusCheckedIn || 'พักอยู่' },
     { key: 'checked_out', label: t.quickStatusCheckedOut || 'เช็คเอาท์แล้ว' },
+    { key: 'cancelled',   label: t.statusCancelled },
   ];
+
+  const sortSelect = (
+    <select
+      value={filterOptions.sortBy}
+      onChange={(e) => onFilterChange({ sortBy: e.target.value as any })}
+      className="glass-input h-10 px-3 pr-8 cursor-pointer text-sm w-full"
+      aria-label="Sort"
+    >
+      <option value="date_desc">{t.sortDateDesc}</option>
+      <option value="date_asc">{t.sortDateAsc}</option>
+      <option value="price_desc">{t.sortPriceDesc}</option>
+      <option value="price_asc">{t.sortPriceAsc}</option>
+      <option value="name_asc">{t.sortNameAsc}</option>
+    </select>
+  );
+
+  const chipGroup = (label: string, current: string, key: 'channel' | 'bedType', opts: { value: string; label: string }[]) => (
+    <div>
+      <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {opts.map((o) => (
+          <button key={o.value} onClick={() => onFilterChange({ [key]: o.value } as any)} aria-pressed={current === o.value} className="chip">
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
 
-      <MonthSelector
-        selectedMonth={selectedMonth}
-        onMonthChange={onMonthChange}
-        availableMonths={availableMonths}
-        lang={lang}
-        t={t}
-      />
-
       {/* Toolbar */}
-      <div className="card overflow-hidden">
-        <div className="p-4 space-y-3">
-          {/* Search row */}
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search
-                className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
-                style={{ color: 'var(--text-muted)' }}
-              />
-              <input
-                type="text"
-                id="search-input"
-                placeholder={t.searchPlaceholder}
-                value={filterOptions.searchQuery}
-                onChange={(e) => onFilterChange({ searchQuery: e.target.value })}
-                className="w-full glass-input pl-10 pr-4 py-2.5 text-sm min-h-[42px]"
-              />
-            </div>
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+        <MonthSelector selectedMonth={selectedMonth} onMonthChange={onMonthChange} availableMonths={availableMonths} lang={lang} t={t} />
 
-            {/* Sort */}
-            <div
-              className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold shrink-0 min-h-[42px]"
-              style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}
-            >
-              <ArrowUpDown className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
-              <select
-                value={filterOptions.sortBy}
-                onChange={(e) => onFilterChange({ sortBy: e.target.value as any })}
-                className="bg-transparent focus:outline-none cursor-pointer text-xs font-semibold"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                <option value="date_desc">{t.sortDateDesc}</option>
-                <option value="date_asc">{t.sortDateAsc}</option>
-                <option value="price_desc">{t.sortPriceDesc}</option>
-                <option value="price_asc">{t.sortPriceAsc}</option>
-                <option value="name_asc">{t.sortNameAsc}</option>
-              </select>
-            </div>
-
-            {/* Filter toggle */}
-            <button
-              id="filter-toggle-btn"
-              onClick={() => setFiltersOpen(!filtersOpen)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all min-h-[42px] shrink-0"
-              style={filtersOpen || hasActiveFilters ? {
-                background: 'var(--brand-light)', border: '1.5px solid #c5d0fa', color: 'var(--brand)',
-              } : {
-                background: 'var(--bg-muted)', border: '1px solid var(--border-light)', color: 'var(--text-secondary)',
-              }}
-            >
-              {hasActiveFilters && !filtersOpen && (
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: 'var(--red)' }} />
-              )}
-              <SlidersHorizontal className="w-4 h-4" />
-              <span className="hidden sm:inline">{filtersOpen ? t.hideFilters : t.showFilters}</span>
-              {filtersOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
-
-            {hasActiveFilters && (
+        <div className="flex items-center gap-2 lg:ml-auto lg:w-[420px]">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--text-muted)' }} />
+            <input
+              type="search"
+              id="search-input"
+              placeholder={t.searchPlaceholder}
+              value={filterOptions.searchQuery}
+              onChange={(e) => onFilterChange({ searchQuery: e.target.value })}
+              className="w-full glass-input h-10 pl-10 pr-9"
+            />
+            {filterOptions.searchQuery && (
               <button
-                id="reset-filter-btn"
-                onClick={onResetFilters}
-                className="p-2.5 rounded-xl transition-all min-h-[42px] min-w-[42px] flex items-center justify-center"
-                style={{ background: '#fff5f5', border: '1px solid var(--red-border)' }}
-                title={t.resetFilterTitle}
+                onClick={() => onFilterChange({ searchQuery: '' })}
+                aria-label="Clear"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center animate-fade-in hover:bg-[var(--bg-hover)]"
+                style={{ color: 'var(--text-muted)' }}
               >
-                <RefreshCw className="w-4 h-4" style={{ color: 'var(--red)' }} />
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
 
-          {/* Status Chips */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-0.5 no-scrollbar">
-            {statusChips.map((chip) => (
-              <button
-                key={chip.key}
-                onClick={() => onFilterChange({ status: chip.key as any })}
-                className={filterOptions.status === chip.key ? `chip active-${chip.key}` : 'chip'}
-              >
-                {chip.label}
-              </button>
-            ))}
+          <button
+            id="filter-toggle-btn"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            aria-expanded={filtersOpen}
+            className="relative h-10 px-3 rounded-xl flex items-center gap-2 text-sm shrink-0 btn-ghost"
+            style={filtersOpen ? { borderColor: 'var(--text-primary)', color: 'var(--text-primary)' } : undefined}
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            <span className="hidden sm:inline">{filtersOpen ? t.hideFilters : t.showFilters}</span>
+            {extraFilters > 0 && (
+              <span className="min-w-5 h-5 px-1 rounded-full text-[11px] font-semibold flex items-center justify-center text-white animate-fab-pop" style={{ background: 'var(--brand)' }}>
+                {extraFilters}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Status chips */}
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0">
+        {statusChips.map((chip) => (
+          <button
+            key={chip.key}
+            onClick={() => onFilterChange({ status: chip.key as any })}
+            aria-pressed={filterOptions.status === chip.key}
+            className="chip shrink-0"
+          >
+            {chip.label}
+          </button>
+        ))}
+        {hasActiveFilters && (
+          <button
+            id="reset-filter-btn"
+            onClick={onResetFilters}
+            className="h-9 px-3 text-sm shrink-0 rounded-full inline-flex items-center gap-1.5 animate-fade-in hover:bg-[var(--bg-hover)]"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            <X className="w-3.5 h-3.5" />{t.resetFilterTitle}
+          </button>
+        )}
+        <span className="ml-auto pl-3 text-sm shrink-0 tabular" style={{ color: 'var(--text-muted)' }}>
+          {bookings.length} {t.recordsUnit}
+        </span>
+      </div>
+
+      {/* Advanced filters (animated) */}
+      <div className={`collapse ${filtersOpen ? 'open' : ''}`}>
+        <div>
+          <div className="card p-4 sm:p-5 grid gap-5 sm:grid-cols-3">
+            {chipGroup(t.filterLabel, filterOptions.channel, 'channel', [
+              { value: 'all', label: t.allChannels },
+              { value: 'booking_com', label: 'Booking.com' },
+              { value: 'walk_in', label: 'Walk-in' },
+            ])}
+            {chipGroup(lang === 'th' ? 'ประเภทห้อง' : 'Room', filterOptions.bedType, 'bedType', [
+              { value: 'all', label: t.allBeds },
+              { value: 'big', label: t.bigBedLabel },
+              { value: 'small', label: t.smallBedLabel },
+            ])}
+            <div>
+              <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>{lang === 'th' ? 'เรียงตาม' : 'Sort by'}</p>
+              {sortSelect}
+            </div>
           </div>
         </div>
-
-        {/* Filter Accordion */}
-        {filtersOpen && (
-          <div
-            className="px-4 py-4 space-y-4 animate-fade-in"
-            style={{ borderTop: '1px solid var(--border-light)', background: 'var(--bg-muted)' }}
-          >
-            {/* Channel */}
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] mb-2" style={{ color: 'var(--text-muted)' }}>
-                {t.filterLabel}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { value: 'all', label: t.allChannels, icon: null },
-                  { value: 'booking_com', label: 'Booking.com', icon: <Globe className="w-3.5 h-3.5" /> },
-                  { value: 'walk_in', label: 'Walk-in', icon: <Footprints className="w-3.5 h-3.5" /> },
-                ].map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => onFilterChange({ channel: opt.value as any })}
-                    className={filterOptions.channel === opt.value
-                      ? 'chip active-all'
-                      : 'chip'}
-                  >
-                    {opt.icon}{opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Bed Type */}
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] mb-2" style={{ color: 'var(--text-muted)' }}>
-                ประเภทห้อง
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { value: 'all', label: t.allBeds, icon: null },
-                  { value: 'big', label: t.bigBedLabel, icon: <BedDouble className="w-3.5 h-3.5" /> },
-                  { value: 'small', label: t.smallBedLabel, icon: <BedSingle className="w-3.5 h-3.5" /> },
-                ].map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => onFilterChange({ bedType: opt.value as any })}
-                    className={filterOptions.bedType === opt.value ? 'chip active-all' : 'chip'}
-                  >
-                    {opt.icon}{opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Status */}
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.12em] mb-2" style={{ color: 'var(--text-muted)' }}>
-                สถานะ
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { value: 'all', label: t.allStatuses },
-                  { value: 'confirmed', label: t.statusConfirmed },
-                  { value: 'checked_in', label: t.statusCheckedIn },
-                  { value: 'checked_out', label: t.statusCheckedOut },
-                  { value: 'cancelled', label: t.statusCancelled },
-                ].map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => onFilterChange({ status: opt.value as any })}
-                    className={filterOptions.status === opt.value ? `chip active-${opt.value}` : 'chip'}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Sort mobile */}
-            <div
-              className="sm:hidden flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold"
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-light)' }}
-            >
-              <ArrowUpDown className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
-              <select
-                value={filterOptions.sortBy}
-                onChange={(e) => onFilterChange({ sortBy: e.target.value as any })}
-                className="bg-transparent focus:outline-none cursor-pointer w-full text-xs font-semibold"
-                style={{ color: 'var(--text-secondary)' }}
-              >
-                <option value="date_desc">{t.sortDateDesc}</option>
-                <option value="date_asc">{t.sortDateAsc}</option>
-                <option value="price_desc">{t.sortPriceDesc}</option>
-                <option value="price_asc">{t.sortPriceAsc}</option>
-                <option value="name_asc">{t.sortNameAsc}</option>
-              </select>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Mobile Cards */}
-      <div className="grid grid-cols-1 md:hidden gap-3">
+      {/* Phone & tablet: cards */}
+      <div className="lg:hidden">
         {bookings.length === 0 ? (
-          <div className="card p-10 text-center">
-            <div className="text-5xl mb-4">🏡</div>
-            <p className="font-semibold text-base" style={{ color: 'var(--text-primary)' }}>{t.emptyMessageTitle}</p>
-            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>{t.emptyMessageSub}</p>
-          </div>
+          <div className="card"><EmptyState t={t} filtered={hasActiveFilters} onReset={onResetFilters} /></div>
         ) : (
-          bookings.map((b, i) => (
-            <BookingCard
-              key={b.id} booking={b} onEdit={onEdit} onDelete={onDelete}
-              onQuickUpdateStatus={onQuickUpdateStatus}
-              onPrintReceipt={onPrintReceipt} onPrintTaxInvoice={onPrintTaxInvoice}
-              t={t} index={i}
-            />
-          ))
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {bookings.map((b, i) => (
+              <BookingCard
+                key={b.id} booking={b} onEdit={onEdit} onDelete={onDelete}
+                onQuickUpdateStatus={onQuickUpdateStatus}
+                onPrintReceipt={onPrintReceipt} onPrintTaxInvoice={onPrintTaxInvoice}
+                t={t} lang={lang} index={i}
+              />
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Desktop Table */}
-      <div className="hidden md:block card overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* Desktop: table */}
+      <div className="hidden lg:block card overflow-hidden">
+        {bookings.length === 0 ? (
+          <EmptyState t={t} filtered={hasActiveFilters} onReset={onResetFilters} />
+        ) : (
           <table className="w-full text-left border-collapse">
             <thead className="table-header">
-              <tr>
-                {[t.colDate, t.colCustomer].map(h => (
-                  <th key={h} className="py-3 px-5 text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>{h}</th>
-                ))}
-                <th className="py-3 px-4 text-center text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>{t.colBed}</th>
-                <th className="py-3 px-4 text-center text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>{t.colChannel}</th>
-                <th className="py-3 px-5 text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>{t.colCheckInOut}</th>
-                <th className="py-3 px-5 text-right text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>{t.colPrice}</th>
-                <th className="py-3 px-4 text-center text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: 'var(--text-muted)' }}>{t.colStatus}</th>
-                <th className="py-3 px-4 w-40" />
+              <tr className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
+                <th className="font-normal py-3 pl-5 pr-3">{t.colCustomer}</th>
+                <th className="font-normal py-3 px-3">{t.colCheckInOut}</th>
+                <th className="font-normal py-3 px-3">{t.colBed}</th>
+                <th className="font-normal py-3 px-3 text-right">{t.colPrice}</th>
+                <th className="font-normal py-3 px-3">{t.colStatus}</th>
+                <th className="py-3 pr-4 pl-3"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
             <tbody>
-              {bookings.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-16 text-center">
-                    <div className="text-5xl mb-4">🏡</div>
-                    <p className="font-semibold text-base" style={{ color: 'var(--text-primary)' }}>{t.emptyMessageTitle}</p>
-                    <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>{t.emptyMessageSub}</p>
+              {bookings.map((b, i) => (
+                <tr
+                  key={b.id}
+                  className={`row row-${b.status} animate-rise stagger`}
+                  style={{ '--i': i, borderBottom: i === bookings.length - 1 ? 'none' : '1px solid var(--border-light)' } as React.CSSProperties}
+                >
+                  <td className="py-3.5 pl-5 pr-3">
+                    <div className="font-medium" style={{ color: 'var(--text-primary)' }}>{b.customerName}</div>
+                    <div className="text-[13px] tabular" style={{ color: 'var(--text-muted)' }}>{b.phoneNumber}</div>
+                  </td>
+                  <td className="py-3.5 px-3 whitespace-nowrap">
+                    <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-primary)' }}>
+                      {formatDateThai(b.checkInDate)}
+                      <ArrowRight className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+                      {formatDateThai(b.checkOutDate)}
+                    </div>
+                    <div className="text-[13px] tabular" style={{ color: 'var(--text-muted)' }}>
+                      {cleanTimeStr(b.checkInTime)} – {cleanTimeStr(b.checkOutTime)}
+                    </div>
+                  </td>
+                  <td className="py-3.5 px-3"><RoomLabel booking={b} t={t} /></td>
+                  <td className="py-3.5 px-3 text-right whitespace-nowrap font-semibold tabular" style={{ color: 'var(--text-primary)' }}>
+                    ฿{b.price.toLocaleString()}
+                  </td>
+                  <td className="py-3.5 px-3 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={b.status} t={t} />
+                      <QuickStatusButton booking={b} onQuickUpdateStatus={onQuickUpdateStatus} lang={lang} />
+                    </div>
+                  </td>
+                  <td className="py-3.5 pr-4 pl-3">
+                    <div className="row-actions flex items-center justify-end gap-0.5">
+                      {onPrintReceipt && (
+                        <button id={`print-btn-${b.id}`} onClick={() => onPrintReceipt(b)} className="action-btn" title="พิมพ์ใบยืนยัน" aria-label="พิมพ์ใบยืนยัน">
+                          <Printer className="w-4 h-4" />
+                        </button>
+                      )}
+                      {onPrintTaxInvoice && (
+                        <button id={`tax-invoice-btn-${b.id}`} onClick={() => onPrintTaxInvoice(b)} className="action-btn" title="ใบกำกับภาษี" aria-label="ใบกำกับภาษี">
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button id={`edit-btn-${b.id}`} onClick={() => onEdit(b)} className="action-btn" title={t.btnEditLabel} aria-label={t.btnEditLabel}>
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button id={`delete-btn-${b.id}`} onClick={() => onDelete(b.id)} className="action-btn action-btn-delete" title={t.btnDeleteLabel} aria-label={t.btnDeleteLabel}>
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ) : (
-                bookings.map((booking, i) => {
-                  const delays = ['delay-0','delay-75','delay-150','delay-225','delay-300','delay-375','delay-450'];
-                  return (
-                    <tr
-                      key={booking.id}
-                      className={`animate-fade-in ${delays[Math.min(i, 6)]} ${`row-${booking.status}`}`}
-                      style={{ borderBottom: '1px solid var(--border-light)' }}
-                    >
-                      {/* Date only (no ID) */}
-                      <td className="py-3.5 px-5 whitespace-nowrap">
-                        <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                          {formatDateThai(booking.createdAt)}
-                        </span>
-                      </td>
-
-                      {/* Customer */}
-                      <td className="py-3.5 px-5">
-                        <div className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{booking.customerName}</div>
-                        <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                          ☎ {booking.phoneNumber}
-                        </div>
-                      </td>
-
-                      {/* Bed */}
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        {booking.bedType === 'big'   && <span className="badge badge-bed-big"><BedDouble className="w-3 h-3" />{t.bedBig}</span>}
-                        {booking.bedType === 'small' && <span className="badge badge-bed-small"><BedSingle className="w-3 h-3" />{t.bedSmall}</span>}
-                        {booking.bedType === 'both'  && <span className="badge badge-bed-both"><BedDouble className="w-3 h-3" />{t.bedBoth}</span>}
-                      </td>
-
-                      {/* Channel */}
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        {booking.bookingChannel === 'booking_com'
-                          ? <span className="badge badge-booking"><Globe className="w-3 h-3" />Booking</span>
-                          : <span className="badge badge-walkin"><Footprints className="w-3 h-3" />Walk-in</span>
-                        }
-                      </td>
-
-                      {/* Check-in/out */}
-                      <td className="py-3.5 px-5 whitespace-nowrap text-xs">
-                        <div className="flex items-center gap-1.5 font-medium" style={{ color: '#087f5b' }}>
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'var(--green)' }} />
-                          {formatDateThai(booking.checkInDate)}
-                          <span className="font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                            ({cleanTimeStr(booking.checkInTime)})
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 font-medium mt-1" style={{ color: '#c92a2a' }}>
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'var(--red)' }} />
-                          {formatDateThai(booking.checkOutDate)}
-                          <span className="font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                            ({cleanTimeStr(booking.checkOutTime)})
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Price */}
-                      <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                        <span className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
-                          ฿{booking.price.toLocaleString()}
-                        </span>
-                      </td>
-
-                      {/* Status + 1-Click Quick Update */}
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <div className="flex flex-col items-center gap-1">
-                          {getStatusBadge(booking.status, t)}
-                          {onQuickUpdateStatus && booking.status === 'confirmed' && (
-                            <button
-                              onClick={() => onQuickUpdateStatus(booking.id, 'checked_in')}
-                              className="text-[10px] font-bold px-2 py-0.5 rounded-md hover:scale-105 active:scale-95 transition-all shadow-xs"
-                              style={{ background: '#e6fcf5', border: '1px solid #c3fae8', color: '#087f5b' }}
-                              title="กด 1-Click เพื่อเช็คอินทันที"
-                            >
-                              📥 เช็คอินเลย
-                            </button>
-                          )}
-                          {onQuickUpdateStatus && booking.status === 'checked_in' && (
-                            <button
-                              onClick={() => onQuickUpdateStatus(booking.id, 'checked_out')}
-                              className="text-[10px] font-bold px-2 py-0.5 rounded-md hover:scale-105 active:scale-95 transition-all shadow-xs"
-                              style={{ background: '#fff5f5', border: '1px solid #ffc9c9', color: '#c92a2a' }}
-                              title="กด 1-Click เพื่อเช็คเอาท์ทันที"
-                            >
-                              🚪 เช็คเอาท์
-                            </button>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {onPrintReceipt && (
-                            <button
-                              id={`print-btn-${booking.id}`}
-                              onClick={() => onPrintReceipt(booking)}
-                              className="action-btn action-btn-print"
-                              title="พิมพ์ใบยืนยัน"
-                            >
-                              <Printer className="w-3.5 h-3.5" style={{ color: 'var(--green)' }} />
-                            </button>
-                          )}
-                          {onPrintTaxInvoice && (
-                            <button
-                              id={`tax-invoice-btn-${booking.id}`}
-                              onClick={() => onPrintTaxInvoice(booking)}
-                              className="action-btn action-btn-tax"
-                              title="ใบกำกับภาษี"
-                            >
-                              <FileText className="w-3.5 h-3.5" style={{ color: 'var(--blue)' }} />
-                            </button>
-                          )}
-                          <button
-                            id={`edit-btn-${booking.id}`}
-                            onClick={() => onEdit(booking)}
-                            className="action-btn action-btn-edit flex items-center gap-1.5 px-3"
-                            style={{ width: 'auto' }}
-                          >
-                            <Edit2 className="w-3.5 h-3.5" style={{ color: 'var(--amber)' }} />
-                            <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                              {t.btnEditLabel}
-                            </span>
-                          </button>
-                          <button
-                            id={`delete-btn-${booking.id}`}
-                            onClick={() => onDelete(booking.id)}
-                            className="action-btn action-btn-delete"
-                            title={t.btnDeleteLabel}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" style={{ color: 'var(--red)' }} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+              ))}
             </tbody>
           </table>
-        </div>
+        )}
       </div>
     </div>
   );

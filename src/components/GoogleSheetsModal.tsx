@@ -112,10 +112,10 @@ export const GoogleSheetsModal: React.FC<GoogleSheetsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden transition-all my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay animate-fade-in overflow-y-auto">
+      <div className="bg-white rounded-[20px] shadow-[var(--shadow-lg)] border border-[var(--border-light)] max-w-2xl animate-scale-in w-full max-h-[90vh] flex flex-col overflow-hidden transition-all my-8">
         {/* Header */}
-        <div className="px-6 py-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
+        <div className="px-6 py-5 bg-[var(--brand)] text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-white/10 rounded-2xl backdrop-blur-md">
               <FileSpreadsheet className="w-6 h-6 text-emerald-200" />

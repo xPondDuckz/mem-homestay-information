@@ -31,8 +31,8 @@ export const ExportImportModal: React.FC<ExportImportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fade-in">
-      <div className="bg-white w-full max-w-lg rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay animate-fade-in">
+      <div className="bg-white w-full max-w-lg rounded-[20px] border border-[var(--border-light)] shadow-[var(--shadow-lg)] overflow-hidden animate-scale-in">
         
         {/* Header */}
         <div className="px-6 py-4 bg-slate-100 border-b border-slate-200 flex items-center justify-between">

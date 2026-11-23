@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
  * Handles asynchronous data updates and React strict mode re-renders cleanly.
  */
 export function useCountUp(target: number, durationMs = 800): number {
-  const [display, setDisplay] = useState(target);
+  const [display, setDisplay] = useState(0);
 
   useEffect(() => {
     let animationFrameId: number;

@@ -35,7 +35,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             <div
               className="p-2 rounded-xl"
               style={{
-                background: isDanger ? '#ffc9c9' : '#ffec99',
+                background: isDanger ? 'var(--red-border)' : '#ffec99',
                 border: `1px solid ${isDanger ? 'var(--red-border)' : 'var(--amber-border)'}`,
               }}
             >

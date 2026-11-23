@@ -3,7 +3,7 @@ import type { BookingRecord, BedType, BookingChannel, BookingStatus } from '../t
 import { generateBookingId } from '../utils/storage';
 import {
   X, User, Phone, BedDouble, BedSingle, Globe, Footprints,
-  Calendar, Clock, DollarSign, FileText, CheckCircle2, ShieldCheck, Plus,
+  Calendar, Clock, DollarSign, FileText, CheckCircle2, Plus,
   CalendarCheck, LogOut, Ban, Printer
 } from 'lucide-react';
 
@@ -22,14 +22,14 @@ const STATUS_OPTIONS: { value: BookingStatus; icon: React.ReactNode; colorClass:
     icon: <CalendarCheck className="w-4 h-4" />,
     colorClass: '',
     activeClass: '',
-    activeStyle: { background: 'var(--green-bg)', border: '1.5px solid var(--green)', color: '#087f5b', fontWeight: 700 },
+    activeStyle: { background: 'var(--green-bg)', border: '1.5px solid var(--green)', color: '#1d6a49', fontWeight: 700 },
   },
   {
     value: 'checked_in',
     icon: <CheckCircle2 className="w-4 h-4" />,
     colorClass: '',
     activeClass: '',
-    activeStyle: { background: 'var(--blue-bg)', border: '1.5px solid var(--blue)', color: '#1864ab', fontWeight: 700 },
+    activeStyle: { background: 'var(--blue-bg)', border: '1.5px solid var(--blue)', color: '#2c5784', fontWeight: 700 },
   },
   {
     value: 'checked_out',
@@ -43,7 +43,7 @@ const STATUS_OPTIONS: { value: BookingStatus; icon: React.ReactNode; colorClass:
     icon: <Ban className="w-4 h-4" />,
     colorClass: '',
     activeClass: '',
-    activeStyle: { background: 'var(--red-bg)', border: '1.5px solid var(--red)', color: '#c92a2a', fontWeight: 700 },
+    activeStyle: { background: 'var(--red-bg)', border: '1.5px solid var(--red)', color: '#9a3026', fontWeight: 700 },
   },
 ];
 
@@ -172,27 +172,22 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-fade-in modal-overlay">
       <div
-        className="w-full sm:max-w-xl rounded-t-3xl sm:rounded-2xl overflow-hidden max-h-[95dvh] flex flex-col animate-slide-up"
+        className="w-full sm:max-w-xl rounded-t-[24px] sm:rounded-[20px] overflow-hidden max-h-[95dvh] flex flex-col animate-slide-up"
         style={{
           background: 'var(--bg-card)',
           border: '1px solid var(--border-light)',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+          boxShadow: 'var(--shadow-lg)',
         }}
       >
+        <div className="sm:hidden pt-2.5 flex justify-center shrink-0"><span className="w-10 h-1 rounded-full" style={{ background: 'var(--border-default)' }} /></div>
         {/* Header Bar */}
         <div
           className="px-5 py-4 flex items-center justify-between shrink-0"
-          style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border-light)' }}
+          style={{ borderBottom: '1px solid var(--border-light)' }}
         >
           <div className="flex items-center gap-3">
-            <div
-              className="p-2 rounded-xl"
-              style={{ background: 'var(--brand)', boxShadow: '0 2px 8px rgba(59,91,219,0.28)' }}
-            >
-              <ShieldCheck className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>
+                        <div>
+              <h2 className="text-lg font-semibold leading-tight" style={{ color: 'var(--text-primary)' }}>
                 {initialData ? t.modalEditTitle : t.modalAddTitle}
               </h2>
               <p className="text-xs font-medium mt-0.5" style={{ color: 'var(--text-muted)' }}>{t.modalSubtitle}</p>
@@ -216,7 +211,7 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
           {/* Row 1: Date & Status */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+              <label className="block text-[13px] font-medium mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
                 <Calendar className="w-4 h-4 shrink-0" style={{ color: 'var(--brand)' }} />
                 {t.fieldDate}
               </label>
@@ -231,7 +226,7 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
 
             {/* Status Picker */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
+              <label className="block text-[13px] font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
                 {t.fieldStatus}
               </label>
               <div className="grid grid-cols-2 gap-1.5">
@@ -257,7 +252,7 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
           {/* Row 2: Name & Phone */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+              <label className="block text-[13px] font-medium mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                 <User className="w-4 h-4 shrink-0" style={{ color: 'var(--brand)' }} />
                 {t.fieldName} <span className="font-black" style={{ color: 'var(--red)' }}>*</span>
               </label>
@@ -271,13 +266,13 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
               />
               {errors.customerName && (
                 <p className="text-xs font-semibold mt-1 flex items-center gap-1" style={{ color: 'var(--red)' }}>
-                  ⚠️ {errors.customerName}
+                  {errors.customerName}
                 </p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+              <label className="block text-[13px] font-medium mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
                 <Phone className="w-4 h-4 shrink-0" style={{ color: 'var(--brand)' }} />
                 {t.fieldPhone} <span className="font-black" style={{ color: 'var(--red)' }}>*</span>
               </label>
@@ -291,7 +286,7 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
               />
               {errors.phoneNumber && (
                 <p className="text-xs font-semibold mt-1 flex items-center gap-1" style={{ color: 'var(--red)' }}>
-                  ⚠️ {errors.phoneNumber}
+                  {errors.phoneNumber}
                 </p>
               )}
             </div>
@@ -299,7 +294,7 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
 
           {/* Row 3: Booking Channel */}
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
+            <label className="block text-[13px] font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
               {t.fieldChannel}
             </label>
             <div className="grid grid-cols-2 gap-2.5">
@@ -363,13 +358,13 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
 
           {/* Row 4: Bed Type */}
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
+            <label className="block text-[13px] font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
               {t.fieldBed}
             </label>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { value: 'big',   icon: <BedDouble className="w-5 h-5" />, label: t.bedBig,   desc: t.bedBigDesc,   activeStyle: { background: 'var(--violet-bg)', border: '1.5px solid var(--violet)', color: '#5f3dc4' }, iconStyle: { background: 'var(--violet)', color: '#fff' } },
-                { value: 'small', icon: <BedSingle className="w-5 h-5" />, label: t.bedSmall, desc: t.bedSmallDesc, activeStyle: { background: '#e3fafc', border: '1.5px solid #66d9e8', color: '#0c7a8a' }, iconStyle: { background: '#0c8599', color: '#fff' } },
+                { value: 'big',   icon: <BedDouble className="w-5 h-5" />, label: t.bedBig,   desc: t.bedBigDesc,   activeStyle: { background: 'var(--violet-bg)', border: '1.5px solid var(--violet)', color: '#544690' }, iconStyle: { background: 'var(--violet)', color: '#fff' } },
+                { value: 'small', icon: <BedSingle className="w-5 h-5" />, label: t.bedSmall, desc: t.bedSmallDesc, activeStyle: { background: 'var(--bg-muted)', border: '1.5px solid #66d9e8', color: '#57564f' }, iconStyle: { background: '#0c8599', color: '#fff' } },
                 { value: 'both',  icon: <><BedDouble className="w-4 h-4" /><BedSingle className="w-3.5 h-3.5 -ml-0.5" /></>, label: t.bedBoth, desc: t.bedBothDesc, activeStyle: { background: 'var(--amber-bg)', border: '1.5px solid var(--amber)', color: '#7d5e00' }, iconStyle: { background: 'var(--amber)', color: '#fff' } },
               ].map((bed) => (
                 <button
@@ -409,7 +404,7 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                 </span>
                 <span
                   className="text-xs font-extrabold px-2.5 py-0.5 rounded-full"
-                  style={{ background: 'var(--brand-light)', border: '1px solid #c5d0fa', color: 'var(--brand)' }}
+                  style={{ background: 'var(--brand-light)', border: '1px solid var(--brand-border)', color: 'var(--brand)' }}
                 >
                   🌙 พัก {nights} คืน
                 </span>
@@ -420,7 +415,7 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                   type="button"
                   onClick={() => addNights(1)}
                   className="px-2.5 py-1 rounded-lg font-semibold text-xs transition flex items-center gap-0.5 min-h-[32px]"
-                  style={{ background: 'var(--brand)', color: '#fff', boxShadow: '0 1px 4px rgba(59,91,219,0.25)' }}
+                  style={{ background: 'var(--brand)', color: '#fff', boxShadow: '0 1px 4px var(--brand-ring)' }}
                 >
                   <Plus className="w-3.5 h-3.5" />1 คืน
                 </button>
@@ -428,7 +423,7 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                   type="button"
                   onClick={() => addNights(2)}
                   className="px-2.5 py-1 rounded-lg font-semibold text-xs transition flex items-center gap-0.5 min-h-[32px]"
-                  style={{ background: 'var(--brand)', color: '#fff', boxShadow: '0 1px 4px rgba(59,91,219,0.25)' }}
+                  style={{ background: 'var(--brand)', color: '#fff', boxShadow: '0 1px 4px var(--brand-ring)' }}
                 >
                   <Plus className="w-3.5 h-3.5" />2 คืน
                 </button>
@@ -446,13 +441,13 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                     id="field-checkin-date"
                     value={formData.checkInDate}
                     onChange={(e) => setFormData({ ...formData, checkInDate: e.target.value })}
-                    className="flex-1 glass-input px-3 py-2 rounded-xl text-xs min-h-[42px]"
+                    className="flex-1 glass-input px-3 py-2 rounded-xl text-sm min-h-[44px]"
                   />
                   <button
                     type="button"
                     onClick={setToday}
                     className="px-2.5 py-1.5 rounded-xl font-semibold text-xs transition shrink-0 min-h-[42px]"
-                    style={{ background: 'var(--green-bg)', border: '1px solid var(--green-border)', color: '#087f5b' }}
+                    style={{ background: 'var(--green-bg)', border: '1px solid var(--green-border)', color: '#1d6a49' }}
                   >
                     {t.btnTodayDate}
                   </button>
@@ -462,7 +457,7 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                   id="field-checkin-time"
                   value={formData.checkInTime}
                   onChange={(e) => setFormData({ ...formData, checkInTime: e.target.value })}
-                  className="w-full glass-input px-3 py-2 rounded-xl text-xs min-h-[42px]"
+                  className="w-full glass-input px-3 py-2 rounded-xl text-sm min-h-[44px]"
                 />
               </div>
 
@@ -475,14 +470,14 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                   id="field-checkout-date"
                   value={formData.checkOutDate}
                   onChange={(e) => setFormData({ ...formData, checkOutDate: e.target.value })}
-                  className="w-full glass-input px-3 py-2 rounded-xl text-xs min-h-[42px]"
+                  className="w-full glass-input px-3 py-2 rounded-xl text-sm min-h-[44px]"
                 />
                 <input
                   type="time"
                   id="field-checkout-time"
                   value={formData.checkOutTime}
                   onChange={(e) => setFormData({ ...formData, checkOutTime: e.target.value })}
-                  className="w-full glass-input px-3 py-2 rounded-xl text-xs min-h-[42px]"
+                  className="w-full glass-input px-3 py-2 rounded-xl text-sm min-h-[44px]"
                 />
               </div>
             </div>
@@ -531,13 +526,13 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
               <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{t.priceUnit}</span>
             </div>
             {errors.price && (
-              <p className="text-xs font-semibold mt-1 flex items-center gap-1" style={{ color: 'var(--red)' }}>⚠️ {errors.price}</p>
+              <p className="text-xs font-semibold mt-1 flex items-center gap-1" style={{ color: 'var(--red)' }}>{errors.price}</p>
             )}
           </div>
 
           {/* Row 7: Notes */}
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+            <label className="block text-[13px] font-medium mb-1.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
               <FileText className="w-4 h-4" style={{ color: 'var(--brand)' }} />
               {t.fieldNotes}
             </label>

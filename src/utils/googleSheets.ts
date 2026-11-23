@@ -1,134 +1,114 @@
 import type { BookingRecord } from '../types/booking';
 
+/** Columns stored in the sheet (order = column order). */
+export const SHEET_COLUMNS = [
+  'id', 'createdAt', 'customerName', 'phoneNumber',
+  'bedType', 'bookingChannel', 'checkInDate', 'checkInTime',
+  'checkOutDate', 'checkOutTime', 'price', 'notes', 'status',
+  'bookNo', 'billNo', 'companyName', 'customerAddress', 'personalId', 'taxId',
+  'collectorName', 'vatRate', 'withholdingTaxRate', 'customItems',
+] as const;
+
 export const GOOGLE_APPS_SCRIPT_TEMPLATE = `// ----------------------------------------------------
-// โค้ดสำหรับวางใน Google Apps Script (extensions > Apps Script)
-// เมื่อวางแล้ว กด "ทำให้ใช้งานได้" (Deploy) > "การทำให้ใช้งานได้ใหม่" (New Deployment)
-// เลือกประเภท: "เว็บแอป" (Web App)
-// ผู้มีสิทธิ์เข้าถึง (Who has access): "ทุกคน" (Anyone)
+// Mem Homestay — Google Apps Script (เวอร์ชัน 2: เก็บข้อมูลบิล/ภาษีครบทุกช่อง)
+// วางใน Extensions > Apps Script แล้วกด Deploy > Manage deployments
+// > แก้ไข (ไอคอนดินสอ) > Version: New version > Deploy
+// (ใช้ deployment เดิม URL จะไม่เปลี่ยน)
+// Who has access: Anyone
 // ----------------------------------------------------
+
+var HEADERS = ${JSON.stringify(SHEET_COLUMNS)};
+var TEXT_COLS = ['id', 'phoneNumber', 'taxId', 'personalId', 'bookNo', 'billNo'];
+var NUM_COLS = ['price', 'vatRate', 'withholdingTaxRate'];
 
 function doGet(e) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) {
-    return createJsonResponse([]);
-  }
+  if (data.length <= 1) return json([]);
   var headers = data[0];
   var result = [];
   for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    
-    // ข้ามแถวที่ไม่มีข้อมูล id หรือ customerName (ป้องกันแถวว่างเด็ดขาด)
-    var rowId = row[0] ? String(row[0]).trim().replace(/^'/, '') : '';
-    var rowName = row[2] ? String(row[2]).trim() : '';
-    if (!rowId && !rowName) continue;
-
-    var obj = {};
+    var row = data[i], obj = {};
     for (var j = 0; j < headers.length; j++) {
-      var key = headers[j];
-      var val = row[j];
-      
-      // คงเลข 0 นำหน้าของเบอร์โทรศัพท์
-      if (key === 'phoneNumber') {
-        val = val ? String(val).trim().replace(/^'/, '') : '';
-        if (val && val.length === 9 && !val.startsWith('0')) {
-          val = '0' + val;
-        }
-      } else if (key === 'price') {
+      var key = headers[j], val = row[j];
+      if (NUM_COLS.indexOf(key) >= 0) {
         val = Number(val) || 0;
+      } else if (key === 'customItems') {
+        try { val = val ? JSON.parse(val) : []; } catch (err) { val = []; }
+      } else if (val instanceof Date) {
+        val = Utilities.formatDate(val, Session.getScriptTimeZone(), key.indexOf('Time') >= 0 ? 'HH:mm' : 'yyyy-MM-dd');
       } else {
         val = val !== undefined && val !== null ? String(val).trim().replace(/^'/, '') : '';
       }
-      
       obj[key] = val;
     }
+    if (!obj.id && !obj.customerName) continue;
     result.push(obj);
   }
-  return createJsonResponse(result);
+  return json(result);
 }
 
 function doPost(e) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
   try {
     var contents = JSON.parse(e.postData.contents);
-    var action = contents.action;
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-
-    if (action === 'sync' || action === 'save_all' || action === 'ping') {
-      if (action === 'ping') {
-        return createJsonResponse({ success: true, status: 'ok' });
-      }
-
-      sheet.clear();
-      var headers = [
-        'id', 'createdAt', 'customerName', 'phoneNumber', 
-        'bedType', 'bookingChannel', 'checkInDate', 'checkInTime', 
-        'checkOutDate', 'checkOutTime', 'price', 'notes', 'status'
-      ];
-      sheet.appendRow(headers);
-      
-      // ตั้งค่าหัวตารางเป็นตัวหนา
-      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
-
-      var bookings = contents.bookings || [];
-      var validCount = 0;
-
-      bookings.forEach(function(b) {
-        if (!b) return;
-        var name = b.customerName ? String(b.customerName).trim() : '';
-        var idVal = b.id ? String(b.id).trim() : '';
-        
-        // ข้ามแถวที่ไม่มีชื่อลูกค้าหรือ id เด็ดขาด
-        if (!name && !idVal) return;
-
-        var phoneStr = b.phoneNumber ? String(b.phoneNumber).trim().replace(/^'/, '') : '';
-        if (phoneStr && phoneStr.length === 9 && !phoneStr.startsWith('0')) {
-          phoneStr = '0' + phoneStr;
-        }
-
-        // ใช้ ' นำหน้าเบอร์โทรศัพท์เพื่อบังคับให้ Google Sheet มองเป็นข้อความ (ไม่ตัดเลข 0)
-        var formattedPhone = phoneStr ? "'" + phoneStr : '';
-
-        sheet.appendRow([
-          "'" + (idVal || ''),
-          b.createdAt || '',
-          name,
-          formattedPhone,
-          b.bedType || 'big',
-          b.bookingChannel || 'walk_in',
-          b.checkInDate || '',
-          b.checkInTime || '',
-          b.checkOutDate || '',
-          b.checkOutTime || '',
-          b.price !== undefined && b.price !== null ? Number(b.price) : 0,
-          b.notes || '',
-          b.status || 'confirmed'
-        ]);
-        validCount++;
-      });
-
-      // ตั้งค่า Format คอลัมน์เบอร์โทรศัพท์ (Column D) ให้เป็น Plain Text เพื่อคงเลข 0
-      if (sheet.getLastRow() > 1) {
-        sheet.getRange(2, 4, sheet.getLastRow() - 1, 1).setNumberFormat("@");
-        sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).setNumberFormat("@");
-      }
-
-      return createJsonResponse({ success: true, count: validCount });
+    if (contents.action === 'ping') return json({ success: true, status: 'ok' });
+    if (contents.action !== 'sync' && contents.action !== 'save_all') {
+      return json({ success: false, message: 'Unknown action' });
     }
 
-    return createJsonResponse({ success: false, message: 'Unknown action' });
+    var rows = (contents.bookings || [])
+      .filter(function (b) { return b && (String(b.id || '').trim() || String(b.customerName || '').trim()); })
+      .map(function (b) {
+        return HEADERS.map(function (key) {
+          var v = b[key];
+          if (key === 'customItems') return v && v.length ? JSON.stringify(v) : '';
+          if (NUM_COLS.indexOf(key) >= 0) return Number(v) || 0;
+          if (v === undefined || v === null) return '';
+          return TEXT_COLS.indexOf(key) >= 0 && String(v) !== '' ? "'" + String(v) : String(v);
+        });
+      });
+
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    sheet.clearContents();
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]).setFontWeight('bold');
+    if (rows.length) sheet.getRange(2, 1, rows.length, HEADERS.length).setValues(rows);
+    sheet.setFrozenRows(1);
+
+    return json({ success: true, count: rows.length, version: 2 });
   } catch (err) {
-    return createJsonResponse({ success: false, error: err.toString() });
+    return json({ success: false, error: err.toString() });
+  } finally {
+    lock.releaseLock();
   }
 }
 
-function createJsonResponse(data) {
-  return ContentService
-    .createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
+function json(data) {
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
 }
 `;
 
 import { cleanDateStr, cleanTimeStr } from './formatters';
+
+const str = (v: any) => (v === undefined || v === null ? '' : String(v).replace(/^'/, '').trim());
+
+/** Invoice / tax fields — only included when present so older sheets stay compatible. */
+function extraFields(item: any): Partial<BookingRecord> {
+  const out: Partial<BookingRecord> = {};
+  (['bookNo', 'billNo', 'companyName', 'customerAddress', 'personalId', 'taxId', 'collectorName'] as const).forEach((k) => {
+    const v = str(item[k]);
+    if (v) (out as any)[k] = v;
+  });
+  if (item.vatRate !== undefined && item.vatRate !== '') out.vatRate = Number(item.vatRate) || 0;
+  if (item.withholdingTaxRate !== undefined && item.withholdingTaxRate !== '') out.withholdingTaxRate = Number(item.withholdingTaxRate) || 0;
+  let items = item.customItems;
+  if (typeof items === 'string' && items.trim()) {
+    try { items = JSON.parse(items); } catch { items = undefined; }
+  }
+  if (Array.isArray(items) && items.length) out.customItems = items;
+  return out;
+}
 
 /**
  * Fetch all bookings from Google Sheets
@@ -184,6 +164,7 @@ export async function fetchFromGoogleSheets(url: string): Promise<BookingRecord[
         price: Number(item.price) || 0,
         notes: String(item.notes || '').trim(),
         status: item.status || 'confirmed',
+        ...extraFields(item),
       };
     });
 }
