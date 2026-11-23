@@ -51,7 +51,7 @@ export function cleanTimeStr(rawTime: any): string {
 
 /**
  * Formats YYYY-MM-DD date into short Thai date format
- * Example: '2026-08-28' -> '28 ส.ค. 2026'
+ * Example: '2026-08-28' -> '28 ส.ค. 2569' (Buddhist year)
  */
 export function formatDateThai(rawDateStr: any): string {
   const clean = cleanDateStr(rawDateStr);
@@ -65,9 +65,14 @@ export function formatDateThai(rawDateStr: any): string {
 
     const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
     if (monthIdx >= 0 && monthIdx < 12) {
-      return `${day} ${thaiMonths[monthIdx]} ${year}`;
+      return `${day} ${thaiMonths[monthIdx]} ${year < 2400 ? year + 543 : year}`;
     }
   }
 
   return clean;
+}
+
+/** Local (not UTC) date as YYYY-MM-DD — avoids "yesterday" before 07:00 in Thailand. */
+export function localDate(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }

@@ -1,339 +1,176 @@
-import React, { useState } from 'react';
-import type { BookingRecord } from '../types/booking';
+import React, { useMemo } from 'react';
+import type { BookingRecord, Room } from '../types/booking';
 import { MonthSelector } from './MonthSelector';
 import type { Language } from '../utils/translations';
-import { LogIn, LogOut, BedDouble, User, PlusCircle, X, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
-import { formatDateThai } from '../utils/formatters';
+import { localDate } from '../utils/formatters';
 
 interface CalendarViewProps {
   bookings: BookingRecord[];
+  rooms: Room[];
   selectedMonth: string;
   onMonthChange: (month: string) => void;
   availableMonths: string[];
   onEditBooking: (booking: BookingRecord) => void;
-  onAddBookingForDate: (dateStr: string) => void;
+  onAddBookingForDate: (dateStr: string, room?: Room) => void;
   lang: Language;
   t: any;
 }
 
+const STATUS_STYLE: Record<string, { bg: string; fg: string; label: string }> = {
+  confirmed:   { bg: 'var(--amber-bg)', fg: '#8a5a10', label: 'รอเช็คอิน' },
+  checked_in:  { bg: 'var(--green-bg)', fg: '#1d6a49', label: 'พักอยู่' },
+  checked_out: { bg: 'var(--bg-muted)', fg: 'var(--text-secondary)', label: 'เช็คเอาท์แล้ว' },
+};
+const EDGE: Record<string, string> = { confirmed: 'var(--amber)', checked_in: 'var(--green)', checked_out: 'var(--border-strong)' };
+
+const pad = (n: number) => String(n).padStart(2, '0');
+const dayDiff = (a: string, b: string) => Math.round((new Date(b + 'T00:00:00').getTime() - new Date(a + 'T00:00:00').getTime()) / 86_400_000);
+
+interface Bar { b: BookingRecord; start: number; span: number; lane: number; clipL: boolean; clipR: boolean }
+
 export const CalendarView: React.FC<CalendarViewProps> = ({
-  bookings,
-  selectedMonth,
-  onMonthChange,
-  availableMonths,
-  onEditBooking,
-  onAddBookingForDate,
-  lang,
-  t,
+  bookings, rooms, selectedMonth, onMonthChange, availableMonths, onEditBooking, onAddBookingForDate, lang, t,
 }) => {
-  const [selectedDayDate, setSelectedDayDate] = useState<string | null>(null);
+  const month = selectedMonth === 'all' ? localDate().slice(0, 7) : selectedMonth;
+  const [y, m] = month.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const first = `${month}-01`;
+  const afterLast = localDate(new Date(y, m, 1));
+  const today = localDate();
+  const days = Array.from({ length: daysInMonth }, (_, i) => {
+    const d = new Date(y, m - 1, i + 1);
+    return { n: i + 1, date: `${month}-${pad(i + 1)}`, dow: d.getDay() };
+  });
+  const dowLabel = lang === 'th' ? ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-  const [yearStr, monthStr] = (selectedMonth === 'all' ? new Date().toISOString().slice(0, 7) : selectedMonth).split('-');
-  const year = parseInt(yearStr, 10) || new Date().getFullYear();
-  const monthIdx = (parseInt(monthStr, 10) || (new Date().getMonth() + 1)) - 1;
+  // Rows = rooms (+ "unassigned" for older bookings that can't be matched to one room).
+  const rows = useMemo(() => {
+    const visible = bookings.filter(
+      (b) => b.status !== 'cancelled' && b.checkInDate && b.checkInDate < afterLast && (b.checkOutDate > b.checkInDate ? b.checkOutDate : b.checkInDate) >= first,
+    );
+    const rowOf = (b: BookingRecord) => {
+      if (b.roomId && rooms.some((r) => r.id === b.roomId)) return b.roomId;
+      const same = rooms.filter((r) => r.bedType === b.bedType);
+      return same.length === 1 ? same[0].id : '__none';
+    };
+    const groups = new Map<string, BookingRecord[]>();
+    visible.forEach((b) => { const k = rowOf(b); groups.set(k, [...(groups.get(k) || []), b]); });
 
-  const firstDayOfWeek = new Date(year, monthIdx, 1).getDay();
-  const daysInMonth = new Date(year, monthIdx + 1, 0).getDate();
-  const daysInPrevMonth = new Date(year, monthIdx, 0).getDate();
+    const layout = (list: BookingRecord[]): { bars: Bar[]; lanes: number } => {
+      const laneEnds: number[] = [];
+      const bars = [...list].sort((a, b) => a.checkInDate.localeCompare(b.checkInDate)).map((b) => {
+        const nights = Math.max(1, dayDiff(b.checkInDate, b.checkOutDate));
+        const s = dayDiff(first, b.checkInDate);
+        const e = s + nights;
+        const start = Math.max(0, s), end = Math.min(daysInMonth, e);
+        let lane = laneEnds.findIndex((le) => le <= start);
+        if (lane < 0) { lane = laneEnds.length; laneEnds.push(end); } else laneEnds[lane] = end;
+        return { b, start, span: Math.max(1, end - start), lane, clipL: s < 0, clipR: e > daysInMonth };
+      });
+      return { bars, lanes: Math.max(1, laneEnds.length) };
+    };
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+    const out = rooms.map((r) => ({ key: r.id, room: r as Room | undefined, name: r.name, ...layout(groups.get(r.id) || []) }));
+    if (groups.has('__none')) out.push({ key: '__none', room: undefined, name: lang === 'th' ? 'ไม่ระบุห้อง' : 'No room', ...layout(groups.get('__none')!) });
+    return out;
+  }, [bookings, rooms, first, afterLast, daysInMonth, lang]);
 
-  const dayNames = lang === 'th' 
-    ? ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.']
-    : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const occupiedNights = rows.filter((r) => r.room).reduce((s, r) => s + r.bars.reduce((x, bar) => x + bar.span, 0), 0);
+  const capacity = rooms.length * daysInMonth || 1;
 
-  const getBookingsForDate = (dateStr: string) => {
-    return bookings.filter((b) => {
-      if (b.status === 'cancelled') return false;
-      const isCheckIn = b.checkInDate === dateStr;
-      const isCheckOut = b.checkOutDate === dateStr;
-      const isStaying = b.checkInDate <= dateStr && dateStr <= b.checkOutDate;
-      return isCheckIn || isCheckOut || isStaying;
-    });
-  };
-
-  const gridCells = [];
-  
-  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-    const dayNum = daysInPrevMonth - i;
-    const prevMonthIdx = monthIdx === 0 ? 11 : monthIdx - 1;
-    const prevYear = monthIdx === 0 ? year - 1 : year;
-    const dateStr = `${prevYear}-${String(prevMonthIdx + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-    gridCells.push({ dayNum, isCurrentMonth: false, dateStr });
-  }
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    gridCells.push({ dayNum: d, isCurrentMonth: true, dateStr });
-  }
-
-  const totalCellsSoFar = gridCells.length;
-  const targetTotal = totalCellsSoFar > 35 ? 42 : 35;
-  const remainingCells = targetTotal - totalCellsSoFar;
-  for (let n = 1; n <= remainingCells; n++) {
-    const nextMonthIdx = monthIdx === 11 ? 0 : monthIdx + 1;
-    const nextYear = monthIdx === 11 ? year + 1 : year;
-    const dateStr = `${nextYear}-${String(nextMonthIdx + 1).padStart(2, '0')}-${String(n).padStart(2, '0')}`;
-    gridCells.push({ dayNum: n, isCurrentMonth: false, dateStr });
-  }
-
-  const selectedDayBookings = selectedDayDate ? getBookingsForDate(selectedDayDate) : [];
+  const cols = `minmax(112px, 150px) repeat(${daysInMonth}, minmax(var(--day-min), 1fr))`;
+  const LANE = 34;
 
   return (
-    <div className="space-y-4 animate-fade-in">
-      
-      <MonthSelector
-        selectedMonth={selectedMonth}
-        onMonthChange={onMonthChange}
-        availableMonths={availableMonths}
-        lang={lang}
-        t={t}
-      />
-
-      <div className="card p-4 sm:p-6 overflow-hidden">
-        
-        {/* Header Indicator */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3" style={{ borderBottom: '1px solid var(--border-light)' }}>
-          <div>
-            <h2 className="text-base font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-              <CalendarIcon className="w-4 h-4" style={{ color: 'var(--brand)' }} />
-              ปฏิทินการจองห้องพัก
-              <span className="text-xs px-2.5 py-0.5 rounded-full font-bold" style={{ background: 'var(--brand-light)', border: '1px solid var(--brand-border)', color: 'var(--brand)' }}>
-                {new Date(year, monthIdx).toLocaleDateString(lang === 'th' ? 'th-TH' : 'en-US', { month: 'long', year: 'numeric' })}
-              </span>
-            </h2>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>คลิกที่วันที่เพื่อดูรายละเอียดหรือเพิ่มรายการจองใหม่ได้ทันที</p>
-          </div>
-
-          {/* Legend Badges */}
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-            <span className="badge badge-confirmed">
-              <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--green)' }} /> เช็คอิน
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <MonthSelector selectedMonth={month} onMonthChange={onMonthChange} availableMonths={availableMonths} lang={lang} t={t} />
+        <div className="flex items-center gap-4 text-[13px]" style={{ color: 'var(--text-secondary)' }}>
+          <span className="tabular">{lang === 'th' ? 'เข้าพัก' : 'Occupancy'} <strong style={{ color: 'var(--text-primary)' }}>{Math.round((occupiedNights / capacity) * 100)}%</strong></span>
+          {Object.entries(STATUS_STYLE).map(([k, s]) => (
+            <span key={k} className="hidden sm:inline-flex items-center gap-1.5">
+              <span className="w-4 h-2.5 rounded-sm" style={{ background: s.bg, boxShadow: `inset 3px 0 0 ${EDGE[k]}` }} />{s.label}
             </span>
-            <span className="badge badge-cancelled">
-              <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--red)' }} /> เช็คเอาท์
-            </span>
-            <span className="badge badge-checked_in">
-              <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--blue)' }} /> พักอยู่
-            </span>
-          </div>
-        </div>
-
-        {/* 7 Columns Day Names Header */}
-        <div className="grid grid-cols-7 gap-1 text-center font-semibold text-xs uppercase tracking-wider mb-2">
-          {dayNames.map((dayName, idx) => (
-            <div
-              key={dayName}
-              className="py-2 rounded-xl"
-              style={idx === 0 || idx === 6
-                ? { background: 'var(--brand-light)', color: 'var(--brand)', fontWeight: 700 }
-                : { background: 'var(--bg-muted)', color: 'var(--text-secondary)' }
-              }
-            >
-              {dayName}
-            </div>
           ))}
         </div>
-
-        {/* Calendar Grid Cells */}
-        <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
-          {gridCells.map((cell) => {
-            const dayBookings = getBookingsForDate(cell.dateStr);
-            const isToday = cell.dateStr === todayStr;
-
-            return (
-              <div
-                key={cell.dateStr}
-                onClick={() => setSelectedDayDate(cell.dateStr)}
-                className="min-h-[85px] sm:min-h-[105px] p-1.5 sm:p-2 rounded-xl transition-all cursor-pointer flex flex-col justify-between group"
-                style={cell.isCurrentMonth
-                  ? isToday
-                    ? { background: 'var(--brand-light)', border: '2px solid var(--brand)', boxShadow: 'var(--shadow-xs)' }
-                    : { background: 'var(--bg-card)', border: '1px solid var(--border-light)' }
-                  : { background: 'var(--bg-muted)', border: '1px solid var(--border-light)', opacity: 0.45 }
-                }
-              >
-                {/* Date Header */}
-                <div className="flex items-center justify-between">
-                  <span
-                    className="inline-flex items-center justify-center text-xs font-bold rounded-md min-w-[22px] h-[22px] px-1"
-                    style={isToday
-                      ? { background: 'var(--brand)', color: '#fff' }
-                      : cell.isCurrentMonth
-                      ? { color: 'var(--text-primary)' }
-                      : { color: 'var(--text-muted)' }
-                    }
-                  >
-                    {cell.dayNum}
-                  </span>
-                  {dayBookings.length > 0 && (
-                    <span
-                      className="text-[10px] font-bold px-1.5 py-0.2 rounded-full"
-                      style={{ background: 'var(--brand-light)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}
-                    >
-                      {dayBookings.length}
-                    </span>
-                  )}
-                </div>
-
-                {/* Day Bookings Pills */}
-                <div className="space-y-1 my-1 overflow-hidden">
-                  {dayBookings.slice(0, 2).map((b) => {
-                    const isCheckIn = b.checkInDate === cell.dateStr;
-                    const isCheckOut = b.checkOutDate === cell.dateStr;
-
-                    let badgeStyle = { background: 'var(--blue-bg)', color: '#2c5784', border: '1px solid var(--blue-border)' };
-                    let prefix = '🛌';
-                    if (isCheckIn) {
-                      badgeStyle = { background: 'var(--green-bg)', color: '#1d6a49', border: '1px solid var(--green-border)' };
-                      prefix = '📥';
-                    } else if (isCheckOut) {
-                      badgeStyle = { background: 'var(--red-bg)', color: '#9a3026', border: '1px solid var(--red-border)' };
-                      prefix = '📤';
-                    }
-
-                    return (
-                      <div
-                        key={b.id}
-                        className="text-[10px] sm:text-xs px-1.5 py-0.5 rounded-md truncate flex items-center gap-1 font-medium"
-                        style={badgeStyle}
-                        title={`${b.customerName} (${b.checkInDate} -> ${b.checkOutDate})`}
-                      >
-                        <span className="shrink-0">{prefix}</span>
-                        <span className="truncate font-semibold">{b.customerName}</span>
-                      </div>
-                    );
-                  })}
-
-                  {dayBookings.length > 2 && (
-                    <div
-                      className="text-[10px] font-bold text-center rounded py-0.5"
-                      style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)' }}
-                    >
-                      +{dayBookings.length - 2} รายการ
-                    </div>
-                  )}
-                </div>
-
-                <div
-                  className="text-[10px] font-semibold text-right transition-colors"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  + จอง
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
       </div>
 
-      {/* Day Details Modal */}
-      {selectedDayDate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in modal-overlay">
-          <div className="modal-panel max-w-lg w-full overflow-hidden animate-slide-up">
-            
-            {/* Header */}
-            <div
-              className="p-4 flex items-center justify-between"
-              style={{ background: 'var(--bg-muted)', borderBottom: '1px solid var(--border-light)' }}
-            >
-              <div>
-                <h3 className="text-base font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                  🗓️ รายการจองประจำวันที่ {formatDateThai(selectedDayDate)}
-                </h3>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>มีรายการจองเข้าพักทั้งหมด {selectedDayBookings.length} รายการ</p>
+      <div className="card overflow-hidden [--day-min:34px] lg:[--day-min:24px]">
+        <div className="overflow-x-auto">
+          <div className="min-w-max" style={{ minWidth: '100%' }}>
+            {/* Day header */}
+            <div className="grid sticky top-0 z-20 bg-[var(--bg-surface)]" style={{ gridTemplateColumns: cols, borderBottom: '1px solid var(--border-light)' }}>
+              <div className="sticky left-0 z-10 bg-[var(--bg-surface)] px-3 py-2 text-xs" style={{ color: 'var(--text-muted)', borderRight: '1px solid var(--border-light)' }}>
+                {lang === 'th' ? 'ห้อง' : 'Room'}
               </div>
-              <button
-                onClick={() => setSelectedDayDate(null)}
-                className="p-1.5 rounded-xl transition-all"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-4 space-y-3 max-h-[60vh] overflow-y-auto">
-              {selectedDayBookings.length === 0 ? (
-                <div className="text-center py-8 rounded-2xl" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}>
-                  <div className="text-3xl mb-2">🌿</div>
-                  <p className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>ยังไม่มีรายการจองในวันนี้</p>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>สามารถกดปุ่มเพิ่มการจองด้านล่างเพื่อบันทึกลูกค้าได้เลย</p>
+              {days.map((d) => (
+                <div key={d.n} className="py-1.5 text-center leading-tight"
+                  style={{ background: d.date === today ? 'var(--brand-light)' : d.dow === 0 || d.dow === 6 ? '#fbfaf7' : undefined }}>
+                  <div className="text-[10.5px]" style={{ color: d.dow === 0 ? 'var(--red)' : 'var(--text-muted)' }}>{dowLabel[d.dow]}</div>
+                  <div className="text-[13px] tabular" style={{ color: d.date === today ? 'var(--brand)' : 'var(--text-primary)', fontWeight: d.date === today ? 600 : 400 }}>{d.n}</div>
                 </div>
-              ) : (
-                selectedDayBookings.map((b) => (
-                  <div
-                    key={b.id}
-                    className="p-3.5 rounded-xl transition-all space-y-2"
-                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-light)' }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="w-8 h-8 rounded-xl flex items-center justify-center text-xs text-white"
-                          style={{ background: 'var(--brand)' }}
-                        >
-                          <User className="w-4 h-4" />
-                        </span>
-                        <div>
-                          <strong className="text-sm font-semibold block" style={{ color: 'var(--text-primary)' }}>{b.customerName}</strong>
-                          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>☎️ {b.phoneNumber}</span>
-                        </div>
-                      </div>
-                      <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>฿{b.price.toLocaleString()}</span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-xs pt-2" style={{ borderTop: '1px solid var(--border-light)' }}>
-                      <div className="font-semibold flex items-center gap-1" style={{ color: '#1d6a49' }}>
-                        <LogIn className="w-3.5 h-3.5" /> In: {formatDateThai(b.checkInDate)} ({b.checkInTime})
-                      </div>
-                      <div className="font-semibold flex items-center gap-1" style={{ color: '#9a3026' }}>
-                        <LogOut className="w-3.5 h-3.5" /> Out: {formatDateThai(b.checkOutDate)} ({b.checkOutTime})
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-xs font-medium flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
-                        <BedDouble className="w-3.5 h-3.5" style={{ color: 'var(--brand)' }} />
-                        {b.bedType === 'big' ? 'เตียงใหญ่' : b.bedType === 'small' ? 'เตียงเล็ก' : 'เตียงใหญ่ + เตียงเล็ก'}
-                      </span>
-
-                      <button
-                        onClick={() => {
-                          setSelectedDayDate(null);
-                          onEditBooking(b);
-                        }}
-                        className="text-xs font-semibold flex items-center gap-0.5 px-3 py-1 rounded-lg transition"
-                        style={{ background: 'var(--brand-light)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}
-                      >
-                        แก้ไขข้อมูล <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
+              ))}
             </div>
 
-            {/* Footer action button */}
-            <div className="p-4 flex items-center justify-end gap-2" style={{ background: 'var(--bg-muted)', borderTop: '1px solid var(--border-light)' }}>
-              <button
-                onClick={() => {
-                  const targetDate = selectedDayDate;
-                  setSelectedDayDate(null);
-                  onAddBookingForDate(targetDate);
-                }}
-                className="w-full flex items-center justify-center gap-2 btn-primary px-4 py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-all"
-              >
-                <PlusCircle className="w-4 h-4" />
-                เพิ่มรายการจองใหม่ในวันที่ {formatDateThai(selectedDayDate)}
-              </button>
-            </div>
+            {/* Rooms */}
+            {rows.map((row, ri) => (
+              <div key={row.key} className="grid relative" style={{ gridTemplateColumns: cols, gridTemplateRows: `repeat(${row.lanes}, ${LANE}px)`, borderBottom: ri === rows.length - 1 ? 'none' : '1px solid var(--border-light)' }}>
+                <div className="sticky left-0 z-10 bg-[var(--bg-surface)] px-3 flex items-center text-sm font-medium truncate"
+                  style={{ gridRow: '1 / -1', gridColumn: 1, color: row.room ? 'var(--text-primary)' : 'var(--text-muted)', borderRight: '1px solid var(--border-light)' }}>
+                  <span className="truncate">{row.name}</span>
+                </div>
 
+                {/* Empty cells: tap to book */}
+                {days.map((d, i) => (
+                  <button
+                    key={d.n}
+                    onClick={() => onAddBookingForDate(d.date, row.room)}
+                    title={`${lang === 'th' ? 'เพิ่มการจอง' : 'Add booking'} · ${d.n}`}
+                    className="cal-cell"
+                    style={{
+                      gridRow: '1 / -1', gridColumn: i + 2,
+                      background: d.date === today ? 'rgba(31,111,84,0.05)' : d.dow === 0 || d.dow === 6 ? '#fbfaf7' : undefined,
+                      borderLeft: i === 0 ? 'none' : '1px solid #f3f2ee',
+                    }}
+                  />
+                ))}
+
+                {/* Booking bars */}
+                {row.bars.map(({ b, start, span, lane, clipL, clipR }, i) => {
+                  const st = STATUS_STYLE[b.status] ?? STATUS_STYLE.confirmed;
+                  return (
+                    <button
+                      key={b.id}
+                      onClick={() => onEditBooking(b)}
+                      title={`${b.customerName} · ${b.checkInDate} → ${b.checkOutDate}`}
+                      className="cal-bar relative z-[5] my-[3px] mx-[2px] px-2 flex items-center gap-1.5 text-[12.5px] text-left overflow-hidden"
+                      style={{
+                        gridRow: lane + 1, gridColumn: `${start + 2} / span ${span}`,
+                        background: st.bg, color: st.fg,
+                        borderRadius: `${clipL ? 0 : 8}px ${clipR ? 0 : 8}px ${clipR ? 0 : 8}px ${clipL ? 0 : 8}px`,
+                        boxShadow: clipL ? undefined : `inset 3px 0 0 ${EDGE[b.status] ?? EDGE.confirmed}`,
+                        animationDelay: `${Math.min(ri * 3 + i, 12) * 30}ms`,
+                      }}
+                    >
+                      <span className="truncate font-medium">{b.customerName}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+
+            {rows.length === 0 && (
+              <p className="p-6 text-sm text-center" style={{ color: 'var(--text-muted)' }}>
+                {lang === 'th' ? 'ยังไม่มีห้อง — เพิ่มห้องได้จากไอคอนประตูด้านบน' : 'No rooms yet'}
+              </p>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
+      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+        {lang === 'th' ? 'แตะช่องว่างเพื่อเพิ่มการจองในห้องและวันนั้น · แตะแถบเพื่อดู/แก้ไข · ไม่แสดงรายการที่ยกเลิก' : 'Tap an empty cell to book · tap a bar to edit'}
+      </p>
     </div>
   );
 };

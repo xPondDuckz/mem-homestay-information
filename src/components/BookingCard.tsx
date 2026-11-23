@@ -1,9 +1,9 @@
 import React from 'react';
-import type { BookingRecord } from '../types/booking';
+import type { BookingRecord, Room } from '../types/booking';
 import type { Language } from '../utils/translations';
 import { Phone, Pencil, Trash2, Printer, FileText, StickyNote, ArrowRight } from 'lucide-react';
 import { formatDateThai, cleanTimeStr } from '../utils/formatters';
-import { StatusBadge, QuickStatusButton, RoomLabel } from './BookingTable';
+import { StatusBadge, QuickStatusButton, RoomLabel, PaymentTag } from './BookingTable';
 
 interface BookingCardProps {
   booking: BookingRecord;
@@ -15,10 +15,11 @@ interface BookingCardProps {
   t: any;
   lang: Language;
   index?: number;
+  rooms?: Room[];
 }
 
 export const BookingCard: React.FC<BookingCardProps> = ({
-  booking: b, onEdit, onDelete, onQuickUpdateStatus, onPrintReceipt, onPrintTaxInvoice, t, lang, index = 0,
+  booking: b, onEdit, onDelete, onQuickUpdateStatus, onPrintReceipt, onPrintTaxInvoice, t, lang, index = 0, rooms,
 }) => (
   <article
     className={`card lift p-4 flex flex-col gap-3.5 animate-rise stagger ${b.status === 'cancelled' ? 'opacity-60' : ''}`}
@@ -51,8 +52,11 @@ export const BookingCard: React.FC<BookingCardProps> = ({
     </div>
 
     <div className="flex items-center justify-between gap-3">
-      <RoomLabel booking={b} t={t} />
-      <span className="text-lg font-semibold tabular" style={{ color: 'var(--text-primary)' }}>฿{b.price.toLocaleString()}</span>
+      <RoomLabel booking={b} t={t} rooms={rooms} />
+      <span className="text-right leading-tight">
+        <span className="block text-lg font-semibold tabular" style={{ color: 'var(--text-primary)' }}>฿{b.price.toLocaleString()}</span>
+        <PaymentTag booking={b} />
+      </span>
     </div>
 
     {b.notes && (

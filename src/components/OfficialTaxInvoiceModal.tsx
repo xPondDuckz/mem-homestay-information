@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { BookingRecord, TaxInvoiceItem } from '../types/booking';
 import { thaiBahtText } from '../utils/thaiBaht';
-import { formatDateThai } from '../utils/formatters';
+import { formatDateThai, localDate } from '../utils/formatters';
 import { X, Printer, Plus, Trash2, Building2, ChevronDown } from 'lucide-react';
 import { DocHeader, DocSignature } from './DocParts';
 
@@ -55,7 +55,7 @@ export const OfficialTaxInvoiceModal: React.FC<OfficialTaxInvoiceModalProps> = (
     if (booking) {
       setBookNo(booking.bookNo || '001');
       setBillNo(booking.billNo || booking.id.replace('MEM-', 'NO.'));
-      setIssueDate(booking.checkInDate || new Date().toISOString().slice(0, 10));
+      setIssueDate(booking.checkInDate || localDate());
       setCustomerName(booking.customerName || '');
       setCompanyName(booking.companyName || '');
       setCustomerAddress(booking.customerAddress || '');

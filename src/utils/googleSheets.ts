@@ -7,6 +7,8 @@ export const SHEET_COLUMNS = [
   'checkOutDate', 'checkOutTime', 'price', 'notes', 'status',
   'bookNo', 'billNo', 'companyName', 'customerAddress', 'personalId', 'taxId',
   'collectorName', 'vatRate', 'withholdingTaxRate', 'customItems',
+  'paymentStatus', 'paymentMethod', 'depositAmount', 'source',
+  'roomId', 'cleanedAt',
 ] as const;
 
 export const GOOGLE_APPS_SCRIPT_TEMPLATE = `// ----------------------------------------------------
@@ -19,10 +21,30 @@ export const GOOGLE_APPS_SCRIPT_TEMPLATE = `// ---------------------------------
 
 var HEADERS = ${JSON.stringify(SHEET_COLUMNS)};
 var TEXT_COLS = ['id', 'phoneNumber', 'taxId', 'personalId', 'bookNo', 'billNo'];
-var NUM_COLS = ['price', 'vatRate', 'withholdingTaxRate'];
+var NUM_COLS = ['price', 'vatRate', 'withholdingTaxRate', 'depositAmount'];
+var SETTINGS_SHEET = 'Settings';
+
+// The bookings tab = first tab that is not "Settings" (don't rely on the active sheet).
+function bookingSheet() {
+  var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+  for (var i = 0; i < sheets.length; i++) if (sheets[i].getName() !== SETTINGS_SHEET) return sheets[i];
+  return sheets[0];
+}
+
+function settingsSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  return ss.getSheetByName(SETTINGS_SHEET) || ss.insertSheet(SETTINGS_SHEET, ss.getSheets().length);
+}
 
 function doGet(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  if (e && e.parameter && e.parameter.settings) {
+    var raw = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SETTINGS_SHEET);
+    var txt = raw ? String(raw.getRange(1, 1).getValue() || '') : '';
+    var parsed = null;
+    try { parsed = txt ? JSON.parse(txt) : null; } catch (err) { parsed = null; }
+    return json({ settings: parsed });
+  }
+  var sheet = bookingSheet();
   var data = sheet.getDataRange().getValues();
   if (data.length <= 1) return json([]);
   var headers = data[0];
@@ -54,6 +76,20 @@ function doPost(e) {
   try {
     var contents = JSON.parse(e.postData.contents);
     if (contents.action === 'ping') return json({ success: true, status: 'ok' });
+    if (contents.action === 'ical') {
+      // Proxy for Booking.com calendar export (browsers can't fetch it directly because of CORS).
+      var icalUrl = String(contents.url || '');
+      var host = icalUrl.indexOf('https://') === 0 ? icalUrl.slice(8).split('/')[0].toLowerCase() : '';
+      if (host !== 'booking.com' && host.slice(-12) !== '.booking.com') {
+        return json({ success: false, error: 'Only booking.com calendar links are allowed' });
+      }
+      var res = UrlFetchApp.fetch(icalUrl, { muteHttpExceptions: true, followRedirects: true });
+      return json({ success: res.getResponseCode() === 200, status: res.getResponseCode(), ics: res.getContentText() });
+    }
+    if (contents.action === 'save_settings') {
+      settingsSheet().getRange(1, 1).setValue(JSON.stringify(contents.settings || {}));
+      return json({ success: true });
+    }
     if (contents.action !== 'sync' && contents.action !== 'save_all') {
       return json({ success: false, message: 'Unknown action' });
     }
@@ -70,7 +106,7 @@ function doPost(e) {
         });
       });
 
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var sheet = bookingSheet();
     sheet.clearContents();
     sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]).setFontWeight('bold');
     if (rows.length) sheet.getRange(2, 1, rows.length, HEADERS.length).setValues(rows);
@@ -89,19 +125,20 @@ function json(data) {
 }
 `;
 
-import { cleanDateStr, cleanTimeStr } from './formatters';
+import { cleanDateStr, cleanTimeStr, localDate } from './formatters';
 
 const str = (v: any) => (v === undefined || v === null ? '' : String(v).replace(/^'/, '').trim());
 
 /** Invoice / tax fields — only included when present so older sheets stay compatible. */
 function extraFields(item: any): Partial<BookingRecord> {
   const out: Partial<BookingRecord> = {};
-  (['bookNo', 'billNo', 'companyName', 'customerAddress', 'personalId', 'taxId', 'collectorName'] as const).forEach((k) => {
+  (['bookNo', 'billNo', 'companyName', 'customerAddress', 'personalId', 'taxId', 'collectorName', 'paymentStatus', 'paymentMethod', 'source', 'roomId', 'cleanedAt'] as const).forEach((k) => {
     const v = str(item[k]);
     if (v) (out as any)[k] = v;
   });
   if (item.vatRate !== undefined && item.vatRate !== '') out.vatRate = Number(item.vatRate) || 0;
   if (item.withholdingTaxRate !== undefined && item.withholdingTaxRate !== '') out.withholdingTaxRate = Number(item.withholdingTaxRate) || 0;
+  if (item.depositAmount !== undefined && item.depositAmount !== '' && Number(item.depositAmount)) out.depositAmount = Number(item.depositAmount);
   let items = item.customItems;
   if (typeof items === 'string' && items.trim()) {
     try { items = JSON.parse(items); } catch { items = undefined; }
@@ -131,7 +168,7 @@ export async function fetchFromGoogleSheets(url: string): Promise<BookingRecord[
     throw new Error('Invalid format returned from Google Sheets');
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDate();
 
   return data
     .filter((item: any) => item && (String(item.customerName || '').trim() !== '' || String(item.id || '').trim() !== ''))
@@ -229,4 +266,22 @@ export async function testGoogleSheetsConnection(url: string): Promise<{ success
       message: `เชื่อมต่อไม่สำเร็จ: ${err?.message || 'ไม่สามารถติดต่อ Google Apps Script ได้'}`,
     };
   }
+}
+
+/**
+ * Download a Booking.com iCal feed through the Apps Script proxy (action: 'ical').
+ */
+export async function fetchIcalViaSheets(sheetsUrl: string, icalUrl: string): Promise<string> {
+  const response = await fetch(sheetsUrl.trim(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'ical', url: icalUrl.trim() }),
+    redirect: 'follow',
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const res = await response.json();
+  if (!res?.success || typeof res.ics !== 'string') {
+    throw new Error(res?.error || res?.message || 'สคริปต์ Google ยังไม่รองรับ iCal (กรุณาอัปเดตสคริปต์)');
+  }
+  return res.ics;
 }

@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import type { Language } from '../utils/translations';
-import { Download, FileSpreadsheet, Plus, Home, Check, Loader2, CloudOff, RotateCw } from 'lucide-react';
+import { Download, FileSpreadsheet, Plus, Home, Check, Loader2, CloudOff, RotateCw, DoorOpen, Smartphone } from 'lucide-react';
 import type { SyncStatus } from '../hooks/useSheetsSync';
 import type { LucideIcon } from 'lucide-react';
 
-export type ViewKey = 'table' | 'calendar' | 'analytics';
+export type ViewKey = 'today' | 'table' | 'calendar' | 'analytics';
 export interface ViewItem { key: ViewKey; label: string; icon: LucideIcon }
 
 interface NavbarProps {
@@ -14,6 +14,8 @@ interface NavbarProps {
   onOpenAddModal: () => void;
   onOpenExportModal: () => void;
   onOpenSheetsModal: () => void;
+  onOpenRooms: () => void;
+  onInstall?: () => void;
   hasSheetsUrl: boolean;
   syncStatus: SyncStatus;
   onRetrySync: () => void;
@@ -74,7 +76,7 @@ export const Segmented: React.FC<{ views: ViewItem[]; current: ViewKey; onChange
 
 export const Navbar: React.FC<NavbarProps> = ({
   views, currentView, onViewChange,
-  onOpenAddModal, onOpenExportModal, onOpenSheetsModal,
+  onOpenAddModal, onOpenExportModal, onOpenSheetsModal, onOpenRooms, onInstall,
   syncStatus, onRetrySync, lang, onLanguageChange, t,
 }) => {
   const [scrolled, setScrolled] = useState(false);
@@ -107,9 +109,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Actions */}
         <div className="flex items-center gap-1 shrink-0">
-          <span id="google-sheets-btn" className="hidden md:inline-flex">
+          <span id="google-sheets-btn" className="inline-flex">
             <SyncBadge status={syncStatus} onRetry={onRetrySync} onOpen={onOpenSheetsModal} />
           </span>
+
+          {onInstall && (
+            <button onClick={onInstall} title="ติดตั้งแอปบนเครื่อง" aria-label="ติดตั้งแอป" className="icon-btn animate-fab-pop" style={{ color: 'var(--brand)' }}>
+              <Smartphone className="w-[18px] h-[18px]" />
+            </button>
+          )}
+
+          <button id="rooms-btn" onClick={onOpenRooms} title="ห้องพัก" aria-label="ห้องพัก" className="icon-btn">
+            <DoorOpen className="w-[18px] h-[18px]" />
+          </button>
 
           <button id="export-btn" onClick={onOpenExportModal} title={t.csvReportBtn} aria-label={t.csvReportBtn} className="icon-btn">
             <Download className="w-[18px] h-[18px]" />
@@ -141,35 +153,32 @@ export const Navbar: React.FC<NavbarProps> = ({
 
 /** Phone-only bottom navigation with a central add button. */
 export const BottomNav: React.FC<{
-  views: ViewItem[]; current: ViewKey; onChange: (v: ViewKey) => void;
-  onAdd: () => void; addLabel: string; onOpenSheets: () => void; hasSheetsUrl: boolean; syncStatus: SyncStatus;
-}> = ({ views, current, onChange, onAdd, addLabel, onOpenSheets, syncStatus }) => {
-  const [a, b, c] = views;
+  views: ViewItem[]; current: ViewKey; onChange: (v: ViewKey) => void; onAdd: () => void; addLabel: string; badge?: Partial<Record<ViewKey, number>>;
+}> = ({ views, current, onChange, onAdd, addLabel, badge = {} }) => {
   const Item = ({ v }: { v: ViewItem }) => (
     <button className="bottom-nav-btn" aria-current={current === v.key ? 'page' : undefined} onClick={() => onChange(v.key)}>
-      <v.icon className="w-[22px] h-[22px]" aria-hidden />
+      <span className="relative">
+        <v.icon className="w-[22px] h-[22px]" aria-hidden />
+        {!!badge[v.key] && (
+          <span className="absolute -top-1.5 -right-2.5 min-w-4 h-4 px-1 rounded-full text-[10px] leading-4 text-center text-white animate-fab-pop" style={{ background: 'var(--red)' }}>
+            {badge[v.key]}
+          </span>
+        )}
+      </span>
       {v.label}
     </button>
   );
+  const half = Math.ceil(views.length / 2);
   return (
     <nav className="bottom-nav md:hidden">
       <div className="flex items-center px-2">
-        <Item v={a} />
-        <Item v={b} />
+        {views.slice(0, half).map((v) => <Item key={v.key} v={v} />)}
         <div className="flex-1 flex justify-center">
           <button id="fab-add-btn" onClick={onAdd} aria-label={addLabel} className="bottom-nav-add">
             <Plus className="w-6 h-6" />
           </button>
         </div>
-        <Item v={c} />
-        <button className="bottom-nav-btn" onClick={onOpenSheets}>
-          <span className="relative">
-            <FileSpreadsheet className="w-[22px] h-[22px]" aria-hidden />
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-white"
-              style={{ background: syncDotColor(syncStatus) }} />
-          </span>
-          Sheets
-        </button>
+        {views.slice(half).map((v) => <Item key={v.key} v={v} />)}
       </div>
     </nav>
   );

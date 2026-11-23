@@ -1,3 +1,4 @@
+import { localDate } from '../utils/formatters';
 import React from 'react';
 import { ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import type { Language } from '../utils/translations';
@@ -25,7 +26,7 @@ export const formatMonthYear = (monthStr: string, lang: Language): string => {
 export const MonthSelector: React.FC<MonthSelectorProps> = ({
   selectedMonth, onMonthChange, availableMonths, t, lang,
 }) => {
-  const currentMonthStr = new Date().toISOString().slice(0, 7);
+  const currentMonthStr = localDate().slice(0, 7);
   const allMonthOptions = Array.from(new Set([...availableMonths, currentMonthStr])).sort().reverse();
 
   const handlePrev = () => {
@@ -35,7 +36,7 @@ export const MonthSelector: React.FC<MonthSelectorProps> = ({
       onMonthChange(allMonthOptions[idx + 1]);
     } else {
       const [y, m] = selectedMonth.split('-').map(Number);
-      onMonthChange(new Date(y, m - 2, 1).toISOString().slice(0, 7));
+      onMonthChange(localDate(new Date(y, m - 2, 1)).slice(0, 7));
     }
   };
 
@@ -45,7 +46,7 @@ export const MonthSelector: React.FC<MonthSelectorProps> = ({
     if (idx > 0) onMonthChange(allMonthOptions[idx - 1]);
     else {
       const [y, m] = selectedMonth.split('-').map(Number);
-      onMonthChange(new Date(y, m, 1).toISOString().slice(0, 7));
+      onMonthChange(localDate(new Date(y, m, 1)).slice(0, 7));
     }
   };
 

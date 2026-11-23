@@ -4,6 +4,7 @@ import type { BookingRecord } from '../types/booking';
 import { X, Printer, ArrowRight } from 'lucide-react';
 import { formatDateThai, cleanTimeStr } from '../utils/formatters';
 import { DocHeader, DocSignature } from './DocParts';
+import { PAYMENT_STATUS_LABEL, PAYMENT_METHOD_LABEL, balanceDue } from '../utils/bookingRules';
 
 interface BookingReceiptModalProps {
   isOpen: boolean;
@@ -144,9 +145,25 @@ export const BookingReceiptModal: React.FC<BookingReceiptModalProps> = ({ isOpen
                     </tr>
                   </tbody>
                 </table>
-                <div className="flex items-baseline justify-end gap-8 pt-3">
-                  <span className="font-medium">รวมทั้งสิ้น</span>
-                  <span className="text-[22px] font-semibold tabular-nums">฿{money(b.price)}</span>
+                <div className="ml-auto sm:w-[280px] pt-3 space-y-1.5">
+                  <div className="flex items-baseline justify-between gap-8">
+                    <span className="font-medium">รวมทั้งสิ้น</span>
+                    <span className="text-[22px] font-semibold tabular-nums">฿{money(b.price)}</span>
+                  </div>
+                  {b.paymentStatus === 'deposit' && (
+                    <div className="flex justify-between" style={{ color: '#57564f' }}>
+                      <span>ชำระมัดจำแล้ว</span><span className="tabular-nums">−{money(Number(b.depositAmount) || 0)}</span>
+                    </div>
+                  )}
+                  {b.paymentStatus && (
+                    <div className="flex justify-between pt-1.5" style={{ borderTop: '1px solid #ebe9e4' }}>
+                      <span>
+                        {b.paymentStatus === 'deposit' ? 'ยอดคงเหลือ' : PAYMENT_STATUS_LABEL[b.paymentStatus]}
+                        {b.paymentMethod && b.paymentStatus !== 'unpaid' && <span style={{ color: '#8f8d85' }}> · {PAYMENT_METHOD_LABEL[b.paymentMethod]}</span>}
+                      </span>
+                      <span className="font-semibold tabular-nums">{b.paymentStatus === 'paid' ? '✓' : `฿${money(balanceDue(b))}`}</span>
+                    </div>
+                  )}
                 </div>
               </section>
 

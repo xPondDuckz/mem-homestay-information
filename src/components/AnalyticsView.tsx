@@ -1,25 +1,11 @@
-import React, { useState, useMemo } from 'react';
-import type { BookingRecord } from '../types/booking';
-import { MonthSelector } from './MonthSelector';
+import React, { useMemo, useState } from 'react';
+import type { BookingRecord, Room } from '../types/booking';
 import type { Language } from '../utils/translations';
-import {
-  TrendingUp,
-  Globe,
-  Footprints,
-  BedDouble,
-  DollarSign,
-  CalendarCheck,
-  Award,
-  PieChart,
-  Users,
-  BarChart3,
-  Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
-} from 'lucide-react';
+import { localDate } from '../utils/formatters';
 
 interface AnalyticsViewProps {
   bookings: BookingRecord[];
+  rooms?: Room[];
   selectedMonth: string;
   onMonthChange: (month: string) => void;
   availableMonths: string[];
@@ -27,646 +13,260 @@ interface AnalyticsViewProps {
   t: any;
 }
 
-export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
-  bookings,
-  selectedMonth,
-  onMonthChange,
-  availableMonths,
-  lang,
-  t,
-}) => {
-  const [chartMode, setChartMode] = useState<'monthly' | 'compare_years' | 'yearly'>('monthly');
-  const [chartMetric, setChartMetric] = useState<'customers' | 'revenue'>('customers');
+type Metric = 'revenue' | 'bookings' | 'nights';
 
-  const availableYears = useMemo(() => {
-    const yearsSet = new Set<string>();
-    yearsSet.add(new Date().getFullYear().toString());
-    bookings.forEach((b) => {
-      const year = b.checkInDate ? b.checkInDate.slice(0, 4) : b.createdAt.slice(0, 4);
-      if (year && year.length === 4) {
-        yearsSet.add(year);
-      }
-    });
-    return Array.from(yearsSet).sort().reverse();
-  }, [bookings]);
+// Palette validated with the dataviz checker (light surface): series + comparison context.
+const C_THIS = '#1a8a5f';
+const C_PREV = '#d9d6ce';
+const C_BOOKING = '#5b8fc7';
+const C_WALKIN = '#1a8a5f';
 
-  const [selectedYear, setSelectedYear] = useState<string>(() => {
-    return new Date().getFullYear().toString();
+const MONTHS_TH = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const nightsOf = (b: BookingRecord) => {
+  const d = Math.round((new Date(b.checkOutDate + 'T00:00:00').getTime() - new Date(b.checkInDate + 'T00:00:00').getTime()) / 86_400_000);
+  return Number.isFinite(d) && d > 0 ? d : 1;
+};
+
+function summarize(list: BookingRecord[]) {
+  const revenue = list.reduce((s, b) => s + (Number(b.price) || 0), 0);
+  const nights = list.reduce((s, b) => s + nightsOf(b), 0);
+  return { revenue, bookings: list.length, nights, adr: nights ? revenue / nights : 0 };
+}
+
+const fmt = (n: number) => Math.round(n).toLocaleString('th-TH');
+const fmtShort = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : fmt(n));
+
+const Delta: React.FC<{ now: number; prev: number }> = ({ now, prev }) => {
+  if (!prev) return <span style={{ color: 'var(--text-muted)' }}>—</span>;
+  const pct = Math.round(((now - prev) / prev) * 100);
+  const up = pct >= 0;
+  return <span style={{ color: up ? '#1d6a49' : '#9a3026' }}>{up ? '▲' : '▼'} {Math.abs(pct)}%</span>;
+};
+
+export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ bookings, rooms = [], selectedMonth, lang }) => {
+  const be = (y: number) => (lang === 'th' ? y + 543 : y);
+  const months = lang === 'th' ? MONTHS_TH : MONTHS_EN;
+  const thisYear = Number(localDate().slice(0, 4));
+
+  const active = useMemo(() => bookings.filter((b) => b.status !== 'cancelled' && b.checkInDate), [bookings]);
+  const years = useMemo(() => {
+    const ys = new Set<number>([thisYear]);
+    active.forEach((b) => ys.add(Number(b.checkInDate.slice(0, 4))));
+    return Array.from(ys).filter(Boolean).sort((a, b) => b - a);
+  }, [active, thisYear]);
+
+  const [year, setYear] = useState<number>(() => (selectedMonth !== 'all' ? Number(selectedMonth.slice(0, 4)) : thisYear) || thisYear);
+  const [metric, setMetric] = useState<Metric>('revenue');
+  const [hover, setHover] = useState<number | null>(null);
+
+  const inYear = (y: number) => active.filter((b) => b.checkInDate.startsWith(String(y)));
+  const cur = summarize(inYear(year));
+  const prev = summarize(inYear(year - 1));
+
+  // Occupancy: nights sold / room-nights available (year to date for the current year).
+  const daysInScope = year === thisYear
+    ? Math.round((new Date(localDate() + 'T00:00:00').getTime() - new Date(`${year}-01-01T00:00:00`).getTime()) / 86_400_000) + 1
+    : (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 366 : 365);
+  const occupancy = rooms.length ? Math.min(100, Math.round((cur.nights / (rooms.length * daysInScope)) * 100)) : null;
+
+  const monthly = useMemo(() => months.map((label, i) => {
+    const key = String(i + 1).padStart(2, '0');
+    const a = summarize(active.filter((b) => b.checkInDate.startsWith(`${year}-${key}`)));
+    const p = summarize(active.filter((b) => b.checkInDate.startsWith(`${year - 1}-${key}`)));
+    return { label, now: a[metric], prev: p[metric], a, p };
+  }), [active, year, metric, months]);
+  const max = Math.max(1, ...monthly.flatMap((m) => [m.now, m.prev]));
+  const metricLabel: Record<Metric, string> = { revenue: 'รายได้', bookings: 'การจอง', nights: 'คืนที่ขายได้' };
+  const show = (v: number) => (metric === 'revenue' ? `฿${fmt(v)}` : fmt(v));
+
+  const yearList = inYear(year);
+  const booking = yearList.filter((b) => b.bookingChannel === 'booking_com').length;
+  const walkin = yearList.length - booking;
+  const bookingPct = yearList.length ? Math.round((booking / yearList.length) * 100) : 0;
+
+  const roomRows = rooms.map((r) => {
+    const n = yearList.filter((b) => b.roomId === r.id).reduce((s, b) => s + nightsOf(b), 0);
+    return { r, n, pct: Math.min(100, Math.round((n / daysInScope) * 100)) };
   });
+  const unassigned = yearList.filter((b) => !b.roomId || !rooms.some((r) => r.id === b.roomId)).length;
 
-  const [compareYear, setCompareYear] = useState<string>(() => {
-    const years = Array.from(new Set([new Date().getFullYear().toString(), ...availableYears])).sort().reverse();
-    if (years.length > 1) return years[1];
-    return (new Date().getFullYear() - 1).toString();
-  });
-
-  const monthNames = [
-    { key: '01', th: 'ม.ค.', en: 'Jan' },
-    { key: '02', th: 'ก.พ.', en: 'Feb' },
-    { key: '03', th: 'มี.ค.', en: 'Mar' },
-    { key: '04', th: 'เม.ย.', en: 'Apr' },
-    { key: '05', th: 'พ.ค.', en: 'May' },
-    { key: '06', th: 'มิ.ย.', en: 'Jun' },
-    { key: '07', th: 'ก.ค.', en: 'Jul' },
-    { key: '08', th: 'ส.ค.', en: 'Aug' },
-    { key: '09', th: 'ก.ย.', en: 'Sep' },
-    { key: '10', th: 'ต.ค.', en: 'Oct' },
-    { key: '11', th: 'พ.ย.', en: 'Nov' },
-    { key: '12', th: 'ธ.ค.', en: 'Dec' },
+  const tiles = [
+    { label: 'รายได้', value: `฿${fmt(cur.revenue)}`, d: <Delta now={cur.revenue} prev={prev.revenue} /> },
+    { label: 'การจอง', value: fmt(cur.bookings), d: <Delta now={cur.bookings} prev={prev.bookings} /> },
+    { label: 'คืนที่ขายได้', value: fmt(cur.nights), d: <Delta now={cur.nights} prev={prev.nights} /> },
+    { label: 'ราคาเฉลี่ย/คืน', value: `฿${fmt(cur.adr)}`, d: <Delta now={cur.adr} prev={prev.adr} /> },
+    ...(occupancy !== null ? [{ label: year === thisYear ? 'อัตราเข้าพัก (ถึงวันนี้)' : 'อัตราเข้าพัก', value: `${occupancy}%`, d: null }] : []),
   ];
 
-  const monthlyChartData = useMemo(() => {
-    return monthNames.map((m) => {
-      const monthStr = `${selectedYear}-${m.key}`;
-      const monthBookings = bookings.filter((b) => {
-        const checkInM = b.checkInDate ? b.checkInDate.slice(0, 7) : b.createdAt.slice(0, 7);
-        return checkInM === monthStr;
-      });
-
-      const validBookings = monthBookings.filter((b) => b.status !== 'cancelled');
-      const customerCount = validBookings.length;
-      const revenue = validBookings.reduce((sum, b) => sum + (b.price || 0), 0);
-
-      return {
-        monthKey: monthStr,
-        label: lang === 'th' ? m.th : m.en,
-        customerCount,
-        revenue,
-        totalBookings: monthBookings.length,
-      };
-    });
-  }, [bookings, selectedYear, lang]);
-
-  const compareYearsChartData = useMemo(() => {
-    return monthNames.map((m) => {
-      const monthStrBase = `${selectedYear}-${m.key}`;
-      const monthStrCompare = `${compareYear}-${m.key}`;
-
-      const baseBookings = bookings.filter((b) => {
-        const checkInM = b.checkInDate ? b.checkInDate.slice(0, 7) : b.createdAt.slice(0, 7);
-        return checkInM === monthStrBase && b.status !== 'cancelled';
-      });
-
-      const compareBookings = bookings.filter((b) => {
-        const checkInM = b.checkInDate ? b.checkInDate.slice(0, 7) : b.createdAt.slice(0, 7);
-        return checkInM === monthStrCompare && b.status !== 'cancelled';
-      });
-
-      const custBase = baseBookings.length;
-      const revBase = baseBookings.reduce((sum, b) => sum + (b.price || 0), 0);
-
-      const custCompare = compareBookings.length;
-      const revCompare = compareBookings.reduce((sum, b) => sum + (b.price || 0), 0);
-
-      const valBase = chartMetric === 'customers' ? custBase : revBase;
-      const valCompare = chartMetric === 'customers' ? custCompare : revCompare;
-
-      const diff = valBase - valCompare;
-      let growthPct = 0;
-      if (valCompare > 0) {
-        growthPct = Math.round(((valBase - valCompare) / valCompare) * 100);
-      } else if (valBase > 0) {
-        growthPct = 100;
-      }
-
-      return {
-        monthKey: m.key,
-        label: lang === 'th' ? m.th : m.en,
-        custBase,
-        revBase,
-        custCompare,
-        revCompare,
-        valBase,
-        valCompare,
-        diff,
-        growthPct,
-      };
-    });
-  }, [bookings, selectedYear, compareYear, chartMetric, lang]);
-
-  const yearlyChartData = useMemo(() => {
-    const yearsList = [...availableYears].sort();
-    let prevCustomers = 0;
-    let prevRevenue = 0;
-
-    return yearsList.map((yearStr) => {
-      const yearBookings = bookings.filter((b) => {
-        const y = b.checkInDate ? b.checkInDate.slice(0, 4) : b.createdAt.slice(0, 4);
-        return y === yearStr;
-      });
-
-      const validBookings = yearBookings.filter((b) => b.status !== 'cancelled');
-      const customerCount = validBookings.length;
-      const revenue = validBookings.reduce((sum, b) => sum + (b.price || 0), 0);
-
-      let customerGrowthPct = 0;
-      if (prevCustomers > 0) {
-        customerGrowthPct = Math.round(((customerCount - prevCustomers) / prevCustomers) * 100);
-      }
-
-      let revenueGrowthPct = 0;
-      if (prevRevenue > 0) {
-        revenueGrowthPct = Math.round(((revenue - prevRevenue) / prevRevenue) * 100);
-      }
-
-      prevCustomers = customerCount;
-      prevRevenue = revenue;
-
-      return {
-        year: yearStr,
-        customerCount,
-        revenue,
-        customerGrowthPct,
-        revenueGrowthPct,
-        totalBookings: yearBookings.length,
-      };
-    });
-  }, [bookings, availableYears]);
-
-  const maxMonthlyVal = useMemo(() => {
-    const vals = monthlyChartData.map((d) => (chartMetric === 'customers' ? d.customerCount : d.revenue));
-    return Math.max(...vals, 1);
-  }, [monthlyChartData, chartMetric]);
-
-  const maxCompareVal = useMemo(() => {
-    const vals = compareYearsChartData.flatMap((d) => [d.valBase, d.valCompare]);
-    return Math.max(...vals, 1);
-  }, [compareYearsChartData]);
-
-  const maxYearlyVal = useMemo(() => {
-    const vals = yearlyChartData.map((d) => (chartMetric === 'customers' ? d.customerCount : d.revenue));
-    return Math.max(...vals, 1);
-  }, [yearlyChartData, chartMetric]);
-
-  const currentMonthBookings = selectedMonth === 'all'
-    ? bookings
-    : bookings.filter((b) => (b.checkInDate && b.checkInDate.startsWith(selectedMonth)) || b.createdAt.startsWith(selectedMonth));
-
-  const validBookings = currentMonthBookings.filter((b) => b.status !== 'cancelled');
-
-  const totalRevenue = validBookings.reduce((sum, b) => sum + b.price, 0);
-  const avgRevenuePerBooking = validBookings.length > 0 ? Math.round(totalRevenue / validBookings.length) : 0;
-
-  const bookingComCount = currentMonthBookings.filter((b) => b.bookingChannel === 'booking_com').length;
-  const walkInCount = currentMonthBookings.filter((b) => b.bookingChannel === 'walk_in').length;
-  const totalChannels = bookingComCount + walkInCount || 1;
-  const bookingComPct = Math.round((bookingComCount / totalChannels) * 100);
-  const walkInPct = 100 - bookingComPct;
-
-  const bigBedCount = currentMonthBookings.filter((b) => b.bedType === 'big' || b.bedType === 'both').length;
-  const smallBedCount = currentMonthBookings.filter((b) => b.bedType === 'small' || b.bedType === 'both').length;
-
-  const statusConfirmedCount = currentMonthBookings.filter((b) => b.status === 'confirmed').length;
-  const statusCheckedInCount = currentMonthBookings.filter((b) => b.status === 'checked_in').length;
-  const statusCheckedOutCount = currentMonthBookings.filter((b) => b.status === 'checked_out').length;
-  const statusCancelledCount = currentMonthBookings.filter((b) => b.status === 'cancelled').length;
-
   return (
-    <div className="space-y-5 animate-fade-in">
-
-      <MonthSelector
-        selectedMonth={selectedMonth}
-        onMonthChange={onMonthChange}
-        availableMonths={availableMonths}
-        lang={lang}
-        t={t}
-      />
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-
-        <div className="card p-5 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>รายได้รวมประจำเดือน</span>
-            <div className="p-2 rounded-xl" style={{ background: 'var(--green-bg)', border: '1px solid var(--green-border)' }}>
-              <DollarSign className="w-4 h-4" style={{ color: 'var(--green)' }} />
-            </div>
-          </div>
-          <div className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>฿{totalRevenue.toLocaleString()}</div>
-          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>จากการจองสำเร็จ {validBookings.length} รายการ</p>
+    <div className="space-y-4">
+      {/* Year + metric */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+          {years.map((y) => (
+            <button key={y} className="chip shrink-0" aria-pressed={y === year} onClick={() => setYear(y)}>
+              {lang === 'th' ? `ปี ${be(y)}` : y}
+            </button>
+          ))}
         </div>
-
-        <div className="card p-5 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>รายได้เฉลี่ยต่อห้อง</span>
-            <div className="p-2 rounded-xl" style={{ background: 'var(--blue-bg)', border: '1px solid var(--blue-border)' }}>
-              <TrendingUp className="w-4 h-4" style={{ color: 'var(--blue)' }} />
-            </div>
-          </div>
-          <div className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>฿{avgRevenuePerBooking.toLocaleString()}</div>
-          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>ราคาเฉลี่ย / การจอง 1 ครั้ง</p>
-        </div>
-
-        <div className="card p-5 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>จำนวนการจองทั้งหมด</span>
-            <div className="p-2 rounded-xl" style={{ background: 'var(--violet-bg)', border: '1px solid var(--violet-border)' }}>
-              <CalendarCheck className="w-4 h-4" style={{ color: 'var(--violet)' }} />
-            </div>
-          </div>
-          <div className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>{currentMonthBookings.length} รายการ</div>
-          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>คำขอลูกค้าในเดือนนี้</p>
-        </div>
-
-        <div className="card p-5 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>ช่องทางยอดนิยม</span>
-            <div className="p-2 rounded-xl" style={{ background: 'var(--brand-light)', border: '1px solid var(--brand-border)' }}>
-              <Award className="w-4 h-4" style={{ color: 'var(--brand)' }} />
-            </div>
-          </div>
-          <div className="text-xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-            {bookingComCount >= walkInCount ? 'Booking.com' : 'Walk-in'}
-          </div>
-          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-            คิดเป็น {bookingComCount >= walkInCount ? bookingComPct : walkInPct}% ของยอดจอง
-          </p>
-        </div>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          เทียบกับปี {be(year - 1)} · นับตามวันเช็คอิน · ไม่รวมรายการยกเลิก
+        </p>
       </div>
 
-      {/* Comparison Chart Container */}
-      <div className="card p-5 sm:p-6 space-y-5">
-
-        {/* Controls Bar */}
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-4" style={{ borderBottom: '1px solid var(--border-light)' }}>
-          <div>
-            <h3 className="text-base font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-              <BarChart3 className="w-5 h-5" style={{ color: 'var(--brand)' }} />
-              กราฟเปรียบเทียบสถิติลูกค้าและรายได้
-            </h3>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              เปรียบเทียบจำนวนลูกค้าหรือรายได้รวม แยกตามรายเดือน หรือ รายปี (YoY)
-            </p>
+      {/* KPI tiles */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        {tiles.map((k, i) => (
+          <div key={k.label} className="stat-card animate-rise stagger" style={{ '--i': i } as React.CSSProperties}>
+            <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>{k.label}</p>
+            <p className="text-[22px] sm:text-2xl font-semibold tabular mt-1 leading-tight" style={{ color: 'var(--text-primary)' }}>{k.value}</p>
+            {k.d && <p className="text-xs mt-1 tabular">{k.d} <span style={{ color: 'var(--text-muted)' }}>จากปีก่อน</span></p>}
           </div>
-
-          <div className="flex flex-wrap items-center gap-2 self-stretch lg:self-auto">
-            {/* Mode Switcher */}
-            <div className="flex flex-wrap items-center p-1 rounded-xl" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}>
-              <button
-                onClick={() => setChartMode('monthly')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={chartMode === 'monthly' ? { background: 'var(--brand)', color: '#fff' } : { color: 'var(--text-secondary)' }}
-              >
-                <Calendar className="w-3.5 h-3.5" />
-                รายเดือน
-              </button>
-              <button
-                onClick={() => setChartMode('compare_years')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={chartMode === 'compare_years' ? { background: 'var(--brand)', color: '#fff' } : { color: 'var(--text-secondary)' }}
-              >
-                <BarChart3 className="w-3.5 h-3.5" />
-                เทียบ 2 ปี
-              </button>
-              <button
-                onClick={() => setChartMode('yearly')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={chartMode === 'yearly' ? { background: 'var(--brand)', color: '#fff' } : { color: 'var(--text-secondary)' }}
-              >
-                <TrendingUp className="w-3.5 h-3.5" />
-                รายปี YoY
-              </button>
-            </div>
-
-            {/* Metric Switcher */}
-            <div className="flex items-center p-1 rounded-xl" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}>
-              <button
-                onClick={() => setChartMetric('customers')}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={chartMetric === 'customers' ? { background: 'var(--brand)', color: '#fff' } : { color: 'var(--text-secondary)' }}
-              >
-                <Users className="w-3.5 h-3.5" />
-                จำนวนคน
-              </button>
-              <button
-                onClick={() => setChartMetric('revenue')}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={chartMetric === 'revenue' ? { background: 'var(--brand)', color: '#fff' } : { color: 'var(--text-secondary)' }}
-              >
-                <DollarSign className="w-3.5 h-3.5" />
-                รายได้
-              </button>
-            </div>
-
-            {/* Year Selector Dropdown */}
-            {chartMode === 'monthly' && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}>
-                <span style={{ color: 'var(--text-muted)' }}>ปี:</span>
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(e.target.value)}
-                  className="bg-transparent font-bold cursor-pointer"
-                  style={{ color: 'var(--text-primary)' }}
-                >
-                  {availableYears.map((y) => (
-                    <option key={y} value={y}>
-                      {y} ({parseInt(y) + 543})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* MODE 1: MONTHLY CHART */}
-        {chartMode === 'monthly' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-xs font-semibold px-1" style={{ color: 'var(--text-muted)' }}>
-              <span>
-                แสดงสถิติรายเดือนประจำปี <strong style={{ color: 'var(--text-primary)' }}>{selectedYear}</strong> (
-                {chartMetric === 'customers' ? 'จำนวนลูกค้าเข้าพัก' : 'ยอดเงินรายได้บาท'})
-              </span>
-              <span className="font-bold" style={{ color: 'var(--brand)' }}>
-                {chartMetric === 'customers'
-                  ? `รวมทั้งปี: ${monthlyChartData.reduce((sum, d) => sum + d.customerCount, 0)} รายการ`
-                  : `รายได้รวมทั้งปี: ฿${monthlyChartData.reduce((sum, d) => sum + d.revenue, 0).toLocaleString()}`}
-              </span>
-            </div>
-
-            <div className="pt-6 pb-2">
-              <div className="flex items-end justify-between gap-1 sm:gap-2 h-60 pb-2" style={{ borderBottom: '1px solid var(--border-light)' }}>
-                {monthlyChartData.map((d) => {
-                  const val = chartMetric === 'customers' ? d.customerCount : d.revenue;
-                  const heightPct = Math.max(Math.round((val / maxMonthlyVal) * 100), val > 0 ? 10 : 3);
-                  const isCurrentSelected = selectedMonth === d.monthKey;
-
-                  return (
-                    <div
-                      key={d.monthKey}
-                      className="flex-1 flex flex-col items-center gap-1.5 group cursor-pointer"
-                      onClick={() => onMonthChange(d.monthKey)}
-                      title={`${d.label} ${selectedYear}: ${
-                        chartMetric === 'customers' ? `${d.customerCount} รายการ` : `฿${d.revenue.toLocaleString()}`
-                      }`}
-                    >
-                      <span className="text-[10px] font-bold transition-all text-center" style={{ color: 'var(--text-secondary)' }}>
-                        {chartMetric === 'customers'
-                          ? val > 0 ? `${val}` : '-'
-                          : val > 0 ? `฿${(val / 1000).toFixed(1)}k` : '-'}
-                      </span>
-
-                      <div className="w-full max-w-[36px] rounded-t-xl overflow-hidden flex items-end h-full p-0.5" style={{ background: 'var(--bg-muted)' }}>
-                        <div
-                          style={{
-                            height: `${heightPct}%`,
-                            background: isCurrentSelected ? 'var(--brand)' : val > 0 ? 'var(--text-primary)' : 'var(--border-default)',
-                          }}
-                          className="w-full rounded-t-md transition-all duration-500 group-hover:bg-brand"
-                        />
-                      </div>
-
-                      <span
-                        className="text-[11px] font-semibold truncate max-w-full"
-                        style={{ color: isCurrentSelected ? 'var(--brand)' : 'var(--text-secondary)' }}
-                      >
-                        {d.label}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* MODE 2: COMPARE 2 YEARS CHART */}
-        {chartMode === 'compare_years' && (
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 text-xs p-3 rounded-xl" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}>
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center gap-1.5 font-semibold">
-                  <span className="w-3.5 h-3.5 rounded-md inline-block" style={{ background: 'var(--brand)' }} />
-                  <span style={{ color: 'var(--text-secondary)' }}>ปีหลัก:</span>
-                  <select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(e.target.value)}
-                    className="bg-white font-bold border rounded-lg px-2 py-1 text-xs cursor-pointer"
-                    style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                  >
-                    {availableYears.map((y) => (
-                      <option key={`base-${y}`} value={y}>
-                        {y} ({parseInt(y) + 543})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-1.5 font-semibold">
-                  <span className="w-3.5 h-3.5 rounded-md inline-block" style={{ background: 'var(--green)' }} />
-                  <span style={{ color: 'var(--text-secondary)' }}>ปีเทียบ:</span>
-                  <select
-                    value={compareYear}
-                    onChange={(e) => setCompareYear(e.target.value)}
-                    className="bg-white font-bold border rounded-lg px-2 py-1 text-xs cursor-pointer"
-                    style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                  >
-                    {availableYears.map((y) => (
-                      <option key={`comp-${y}`} value={y}>
-                        {y} ({parseInt(y) + 543})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-6 pb-2">
-              <div className="flex items-end justify-between gap-1 sm:gap-2 h-64 pb-2" style={{ borderBottom: '1px solid var(--border-light)' }}>
-                {compareYearsChartData.map((d) => {
-                  const hBasePct = Math.max(Math.round((d.valBase / maxCompareVal) * 100), d.valBase > 0 ? 10 : 3);
-                  const hCompPct = Math.max(Math.round((d.valCompare / maxCompareVal) * 100), d.valCompare > 0 ? 10 : 3);
-
-                  return (
-                    <div
-                      key={d.monthKey}
-                      className="flex-1 flex flex-col items-center gap-1.5 group relative min-w-0"
-                    >
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border whitespace-nowrap ${
-                        d.growthPct > 0 ? 'badge-confirmed' : d.growthPct < 0 ? 'badge-cancelled' : 'badge-checked_out'
-                      }`}>
-                        {d.growthPct > 0 ? `+${d.growthPct}%` : `${d.growthPct}%`}
-                      </span>
-
-                      <div className="w-full flex items-end justify-center gap-0.5 rounded-t-xl h-full p-0.5" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}>
-                        <div className="flex-1 flex flex-col items-center justify-end h-full min-w-0">
-                          <div
-                            style={{ height: `${hBasePct}%`, background: 'var(--brand)' }}
-                            className="w-full rounded-t-md transition-all duration-500"
-                          />
-                        </div>
-
-                        <div className="flex-1 flex flex-col items-center justify-end h-full min-w-0">
-                          <div
-                            style={{ height: `${hCompPct}%`, background: 'var(--green)' }}
-                            className="w-full rounded-t-md transition-all duration-500"
-                          />
-                        </div>
-                      </div>
-
-                      <span className="text-[11px] font-semibold mt-1" style={{ color: 'var(--text-primary)' }}>{d.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* MODE 3: YEARLY YoY CHART */}
-        {chartMode === 'yearly' && (
-          <div className="space-y-4">
-            <div className="text-xs font-semibold px-1" style={{ color: 'var(--text-muted)' }}>
-              เปรียบเทียบสถิติรายปี (Year-over-Year Comparison) ครอบคลุมทุกปีที่มีข้อมูล
-            </div>
-
-            <div className="pt-6 pb-2">
-              <div className="flex items-end justify-around gap-4 h-64 pb-2" style={{ borderBottom: '1px solid var(--border-light)' }}>
-                {yearlyChartData.map((yData) => {
-                  const val = chartMetric === 'customers' ? yData.customerCount : yData.revenue;
-                  const heightPct = Math.max(Math.round((val / maxYearlyVal) * 100), val > 0 ? 12 : 5);
-                  const growth = chartMetric === 'customers' ? yData.customerGrowthPct : yData.revenueGrowthPct;
-
-                  return (
-                    <div key={yData.year} className="flex-1 max-w-[120px] flex flex-col items-center gap-2 group">
-                      {growth !== 0 && (
-                        <div
-                          className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                            growth > 0 ? 'badge-confirmed' : 'badge-cancelled'
-                          }`}
-                        >
-                          {growth > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                          {growth > 0 ? `+${growth}%` : `${growth}%`} YoY
-                        </div>
-                      )}
-
-                      <span className="text-xs font-bold text-center" style={{ color: 'var(--text-primary)' }}>
-                        {chartMetric === 'customers'
-                          ? `${yData.customerCount} รายการ`
-                          : `฿${yData.revenue.toLocaleString()}`}
-                      </span>
-
-                      <div className="w-full rounded-t-2xl overflow-hidden flex items-end h-full p-1" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}>
-                        <div
-                          style={{ height: `${heightPct}%`, background: 'var(--brand)' }}
-                          className="w-full rounded-t-xl transition-all duration-500"
-                        />
-                      </div>
-
-                      <div className="text-center">
-                        <span className="text-sm font-bold block" style={{ color: 'var(--text-primary)' }}>{yData.year}</span>
-                        <span className="text-[10px] block font-medium" style={{ color: 'var(--text-muted)' }}>
-                          ({parseInt(yData.year) + 543})
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
+        ))}
       </div>
 
-      {/* CHANNEL & BED BREAKDOWN */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 card p-5 sm:p-6 space-y-4">
+      {/* Monthly chart */}
+      <section className="card p-4 sm:p-5 animate-rise stagger" style={{ '--i': 5 } as React.CSSProperties}>
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-base font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-              <PieChart className="w-5 h-5" style={{ color: 'var(--brand)' }} />
-              สัดส่วนช่องทางจอง (Channels)
-            </h3>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>เปรียบเทียบ Booking.com กับ Walk-in</p>
-          </div>
-
-          <div className="space-y-3">
-            <div className="h-4 w-full rounded-full overflow-hidden flex p-0.5" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}>
-              <div
-                style={{ width: `${bookingComPct}%`, background: 'var(--blue)' }}
-                className="h-full rounded-full transition-all duration-500"
-              />
-              <div
-                style={{ width: `${walkInPct}%`, background: 'var(--green)' }}
-                className="h-full rounded-full transition-all duration-500"
-              />
+            <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>{metricLabel[metric]}รายเดือน</h2>
+            <div className="flex items-center gap-4 mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+              <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: C_THIS }} />ปี {be(year)}</span>
+              <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: C_PREV }} />ปี {be(year - 1)}</span>
             </div>
+          </div>
+          <div className="segmented sm:w-[300px]" style={{ '--count': 3, '--index': ['revenue', 'bookings', 'nights'].indexOf(metric) } as React.CSSProperties}>
+            <span className="segmented-thumb" aria-hidden />
+            {(['revenue', 'bookings', 'nights'] as Metric[]).map((k) => (
+              <button key={k} className="segmented-btn !px-2" aria-current={metric === k ? 'page' : undefined} onClick={() => setMetric(k)}>
+                {k === 'revenue' ? 'รายได้' : k === 'bookings' ? 'การจอง' : 'คืน'}
+              </button>
+            ))}
+          </div>
+        </header>
 
-            <div className="grid grid-cols-2 gap-3 pt-1 text-xs">
-              <div className="p-3 rounded-xl" style={{ background: 'var(--blue-bg)', border: '1px solid var(--blue-border)' }}>
-                <span className="font-semibold flex items-center gap-1" style={{ color: '#2c5784' }}>
-                  <Globe className="w-4 h-4" /> Booking.com
-                </span>
-                <strong className="font-bold text-base block mt-1" style={{ color: 'var(--text-primary)' }}>
-                  {bookingComCount} รายการ ({bookingComPct}%)
-                </strong>
+        <div className="relative" onMouseLeave={() => setHover(null)}>
+          {/* recessive grid */}
+          <div className="absolute inset-x-0 top-0 h-[200px] pointer-events-none">
+            {[1, 0.5, 0].map((f) => (
+              <div key={f} className="absolute inset-x-0 flex items-center gap-2" style={{ top: `${(1 - f) * 100}%`, transform: 'translateY(-50%)' }}>
+                <span className="text-[10.5px] w-9 text-right tabular" style={{ color: 'var(--text-muted)' }}>{fmtShort(max * f)}</span>
+                <span className="flex-1 h-px" style={{ background: f === 0 ? 'var(--border-default)' : 'var(--border-light)' }} />
               </div>
+            ))}
+          </div>
 
-              <div className="p-3 rounded-xl" style={{ background: 'var(--green-bg)', border: '1px solid var(--green-border)' }}>
-                <span className="font-semibold flex items-center gap-1" style={{ color: '#1d6a49' }}>
-                  <Footprints className="w-4 h-4" /> Walk-in
-                </span>
-                <strong className="font-bold text-base block mt-1" style={{ color: 'var(--text-primary)' }}>
-                  {walkInCount} รายการ ({walkInPct}%)
-                </strong>
+          <div className="relative grid grid-cols-12 gap-1 sm:gap-2 pl-11 h-[200px] items-end">
+            {monthly.map((m, i) => (
+              <button
+                key={m.label}
+                className="relative h-full flex items-end justify-center gap-[2px] rounded-md"
+                style={{ background: hover === i ? 'var(--bg-muted)' : undefined }}
+                onMouseEnter={() => setHover(i)}
+                onFocus={() => setHover(i)}
+                onClick={() => setHover(hover === i ? null : i)}
+                aria-label={`${m.label}: ${show(m.now)}, ปีก่อน ${show(m.prev)}`}
+              >
+                <span className="w-[30%] max-w-[10px] rounded-t-[4px] origin-bottom chart-bar" style={{ height: `${(m.prev / max) * 100}%`, background: C_PREV, animationDelay: `${i * 25}ms` }} />
+                <span className="w-[42%] max-w-[16px] rounded-t-[4px] origin-bottom chart-bar" style={{ height: `${(m.now / max) * 100}%`, background: C_THIS, animationDelay: `${i * 25 + 80}ms` }} />
+              </button>
+            ))}
+          </div>
+          <div className="grid grid-cols-12 gap-1 sm:gap-2 pl-11 mt-1.5">
+            {monthly.map((m) => <span key={m.label} className="text-[10.5px] sm:text-xs text-center" style={{ color: 'var(--text-muted)' }}>{m.label}</span>)}
+          </div>
+
+          {hover !== null && (
+            <div
+              className="absolute z-10 top-0 px-3 py-2 rounded-xl text-xs pointer-events-none animate-fade-in whitespace-nowrap"
+              style={{
+                left: `calc(44px + (100% - 44px) * ${(hover + 0.5) / 12})`,
+                transform: `translateX(${hover > 8 ? '-100%' : hover < 3 ? '0' : '-50%'})`,
+                background: 'var(--text-primary)', color: '#fff', boxShadow: 'var(--shadow-md)',
+              }}
+            >
+              <p className="font-medium mb-1">{monthly[hover].label}</p>
+              <p className="tabular"><span className="inline-block w-2 h-2 rounded-sm mr-1.5" style={{ background: C_THIS }} />{be(year)}: {show(monthly[hover].now)}</p>
+              <p className="tabular opacity-80"><span className="inline-block w-2 h-2 rounded-sm mr-1.5" style={{ background: C_PREV }} />{be(year - 1)}: {show(monthly[hover].prev)}</p>
+            </div>
+          )}
+        </div>
+
+        <details className="mt-4 group">
+          <summary className="text-sm cursor-pointer select-none" style={{ color: 'var(--brand)' }}>ดูเป็นตาราง</summary>
+          <div className="overflow-x-auto mt-3">
+            <table className="w-full text-[13px] tabular">
+              <thead>
+                <tr style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border-light)' }}>
+                  <th className="text-left font-normal py-2">เดือน</th>
+                  <th className="text-right font-normal py-2">รายได้</th>
+                  <th className="text-right font-normal py-2">การจอง</th>
+                  <th className="text-right font-normal py-2">คืน</th>
+                  <th className="text-right font-normal py-2">รายได้ปีก่อน</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthly.map((m) => (
+                  <tr key={m.label} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    <td className="py-1.5">{m.label}</td>
+                    <td className="text-right">฿{fmt(m.a.revenue)}</td>
+                    <td className="text-right">{m.a.bookings}</td>
+                    <td className="text-right">{m.a.nights}</td>
+                    <td className="text-right" style={{ color: 'var(--text-muted)' }}>฿{fmt(m.p.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Channel split */}
+        <section className="card p-4 sm:p-5 animate-rise stagger" style={{ '--i': 6 } as React.CSSProperties}>
+          <h2 className="font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>ช่องทางการจอง</h2>
+          {yearList.length === 0 ? (
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>ยังไม่มีข้อมูลปีนี้</p>
+          ) : (
+            <>
+              <div className="flex h-3 rounded-full overflow-hidden gap-[2px]">
+                {booking > 0 && <span className="chart-hbar" style={{ width: `${bookingPct}%`, background: C_BOOKING }} />}
+                {walkin > 0 && <span className="chart-hbar" style={{ width: `${100 - bookingPct}%`, background: C_WALKIN }} />}
               </div>
-            </div>
-          </div>
-        </div>
+              <div className="flex justify-between mt-3 text-sm">
+                <span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: C_BOOKING }} />Booking.com <strong className="tabular">{bookingPct}%</strong> <span className="tabular" style={{ color: 'var(--text-muted)' }}>({booking})</span></span>
+                <span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: C_WALKIN }} />Walk-in <strong className="tabular">{100 - bookingPct}%</strong> <span className="tabular" style={{ color: 'var(--text-muted)' }}>({walkin})</span></span>
+              </div>
+            </>
+          )}
+        </section>
 
-        <div className="card p-5 sm:p-6 space-y-4">
-          <div>
-            <h3 className="text-base font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-              <BedDouble className="w-5 h-5" style={{ color: 'var(--brand)' }} />
-              สถิติประเภทเตียง
-            </h3>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>จำแนกประเภทเตียงที่ลูกค้าจอง</p>
-          </div>
-
-          <div className="space-y-2 text-xs">
-            <div className="p-3 rounded-xl flex items-center justify-between" style={{ background: 'var(--violet-bg)', border: '1px solid var(--violet-border)' }}>
-              <span className="font-semibold flex items-center gap-1.5" style={{ color: '#544690' }}>
-                <BedDouble className="w-4 h-4" /> เตียงใหญ่ (Big Bed)
-              </span>
-              <strong className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>{bigBedCount} ห้อง</strong>
-            </div>
-
-            <div className="p-3 rounded-xl flex items-center justify-between" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-default)' }}>
-              <span className="font-semibold flex items-center gap-1.5" style={{ color: '#57564f' }}>
-                <BedDouble className="w-4 h-4" /> เตียงเล็ก (Small Bed)
-              </span>
-              <strong className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>{smallBedCount} ห้อง</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* STATUS BREAKDOWN STRIP */}
-      <div className="card p-5 space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-secondary)' }}>
-          สรุปสถานะรายการทั้งหมดประจำเดือน ({selectedMonth})
-        </h3>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-          <div className="p-3 rounded-xl" style={{ background: 'var(--green-bg)', border: '1px solid var(--green-border)' }}>
-            <span className="font-semibold block" style={{ color: '#1d6a49' }}>รอเช็คอิน (Confirmed)</span>
-            <strong className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{statusConfirmedCount} รายการ</strong>
-          </div>
-
-          <div className="p-3 rounded-xl" style={{ background: 'var(--blue-bg)', border: '1px solid var(--blue-border)' }}>
-            <span className="font-semibold block" style={{ color: '#2c5784' }}>พักอยู่ (Checked-In)</span>
-            <strong className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{statusCheckedInCount} รายการ</strong>
-          </div>
-
-          <div className="p-3 rounded-xl" style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-light)' }}>
-            <span className="font-semibold block" style={{ color: 'var(--text-secondary)' }}>เช็คเอาท์แล้ว (Checked-Out)</span>
-            <strong className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{statusCheckedOutCount} รายการ</strong>
-          </div>
-
-          <div className="p-3 rounded-xl" style={{ background: 'var(--red-bg)', border: '1px solid var(--red-border)' }}>
-            <span className="font-semibold block" style={{ color: '#9a3026' }}>ยกเลิก (Cancelled)</span>
-            <strong className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{statusCancelledCount} รายการ</strong>
-          </div>
-        </div>
+        {/* Room occupancy */}
+        <section className="card p-4 sm:p-5 animate-rise stagger" style={{ '--i': 7 } as React.CSSProperties}>
+          <h2 className="font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>อัตราเข้าพักรายห้อง</h2>
+          {roomRows.length === 0 ? (
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>ยังไม่ได้ตั้งค่าห้อง</p>
+          ) : (
+            <ul className="space-y-3">
+              {roomRows.map(({ r, n, pct }) => (
+                <li key={r.id} title={`${r.name}: ${n} คืน`}>
+                  <div className="flex justify-between text-sm mb-1.5">
+                    <span style={{ color: 'var(--text-primary)' }}>{r.name}</span>
+                    <span className="tabular" style={{ color: 'var(--text-secondary)' }}>{pct}% <span style={{ color: 'var(--text-muted)' }}>· {n} คืน</span></span>
+                  </div>
+                  <div className="h-2 rounded-full" style={{ background: 'var(--bg-muted)' }}>
+                    <div className="h-full rounded-full chart-hbar" style={{ width: `${pct}%`, background: C_THIS }} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {unassigned > 0 && (
+            <p className="text-xs mt-3" style={{ color: 'var(--text-muted)' }}>มี {unassigned} รายการที่ยังไม่ได้ระบุห้อง (ไม่นับในรายห้อง)</p>
+          )}
+        </section>
       </div>
     </div>
   );

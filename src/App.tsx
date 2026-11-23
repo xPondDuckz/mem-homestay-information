@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { localDate } from './utils/formatters';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { BookingRecord, BookingFilterOptions, BookingStats } from './types/booking';
 import {
   loadBookingsFromStorage,
@@ -11,6 +12,12 @@ import {
   clearLocalStorageBookings,
 } from './utils/storage';
 import { useSheetsSync } from './hooks/useSheetsSync';
+import { fetchIcalViaSheets } from './utils/googleSheets';
+import { parseIcs, mergeIcal } from './utils/icalImport';
+import { useSettings } from './utils/settings';
+import { balanceDue } from './utils/bookingRules';
+import { RoomsModal } from './components/RoomsModal';
+import { TodayView, unpaidBookings } from './components/TodayView';
 import { translations } from './utils/translations';
 import type { Language } from './utils/translations';
 import { Navbar, BottomNav } from './components/Navbar';
@@ -25,7 +32,7 @@ import { OfficialTaxInvoiceModal } from './components/OfficialTaxInvoiceModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { CalendarView } from './components/CalendarView';
 import { AnalyticsView } from './components/AnalyticsView';
-import { CheckCircle2, List, Calendar as CalendarIcon, BarChart3 } from 'lucide-react';
+import { CheckCircle2, List, Calendar as CalendarIcon, BarChart3, Sun } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [bookings, setBookings] = useState<BookingRecord[]>(() => loadBookingsFromStorage());
@@ -40,10 +47,10 @@ export const App: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // View state: 'table' | 'calendar' | 'analytics'
-  const [currentView, setCurrentView] = useState<ViewKey>('table');
+  const [currentView, setCurrentView] = useState<ViewKey>('today');
 
   // Month selection state (defaults to current month 'YYYY-MM')
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => localDate().slice(0, 7));
 
   // Google Sheets state
   const [sheetsUrl, setSheetsUrl] = useState<string>(() => getGoogleSheetsUrl());
@@ -75,6 +82,7 @@ export const App: React.FC = () => {
   const t = translations[lang];
 
   const views: ViewItem[] = [
+    { key: 'today', label: lang === 'th' ? 'วันนี้' : 'Today', icon: Sun },
     { key: 'table', label: lang === 'th' ? 'รายการ' : 'Bookings', icon: List },
     { key: 'calendar', label: lang === 'th' ? 'ปฏิทิน' : 'Calendar', icon: CalendarIcon },
     { key: 'analytics', label: lang === 'th' ? 'สรุปผล' : 'Insights', icon: BarChart3 },
@@ -96,6 +104,64 @@ export const App: React.FC = () => {
 
   // Google Sheets: load once, then save every change (debounced, retried).
   const sync = useSheetsSync(sheetsUrl, bookings, setBookings);
+
+  // PWA install prompt (Chrome / Edge / Android).
+  const [installEvt, setInstallEvt] = useState<any>(null);
+  useEffect(() => {
+    const onPrompt = (e: Event) => { e.preventDefault(); setInstallEvt(e); };
+    const onInstalled = () => setInstallEvt(null);
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => { window.removeEventListener('beforeinstallprompt', onPrompt); window.removeEventListener('appinstalled', onInstalled); };
+  }, []);
+  const handleInstall = async () => {
+    if (!installEvt) return;
+    installEvt.prompt();
+    await installEvt.userChoice.catch(() => null);
+    setInstallEvt(null);
+  };
+
+  // Rooms (shared across devices via the sheet's Settings tab).
+  const { settings, save: saveSettings } = useSettings(sheetsUrl);
+  const rooms = settings.rooms;
+  const [isRoomsOpen, setIsRoomsOpen] = useState(false);
+
+  // Booking.com iCal → bookings (through the Apps Script proxy), one feed per room.
+  const bookingsRef = useRef(bookings);
+  bookingsRef.current = bookings;
+  const roomsRef = useRef(rooms);
+  roomsRef.current = rooms;
+  const runIcalImport = useCallback(async (): Promise<string> => {
+    if (!sheetsUrl) return 'ต้องเชื่อม Google Sheet ก่อน';
+    let current = bookingsRef.current, added = 0, updated = 0, cancelled = 0;
+    const errors: string[] = [];
+    for (const room of roomsRef.current) {
+      if (!room.icalUrl) continue;
+      try {
+        const r = mergeIcal(current, room, parseIcs(await fetchIcalViaSheets(sheetsUrl, room.icalUrl)));
+        current = r.bookings; added += r.added; updated += r.updated; cancelled += r.cancelled;
+      } catch (err: any) {
+        errors.push(`${room.name}: ${err?.message || err}`);
+      }
+    }
+    if (current !== bookingsRef.current) setBookings(current);
+    if (errors.length) return 'ดึงไม่สำเร็จ — ' + errors.join(' / ');
+    return added || updated || cancelled
+      ? `เพิ่ม ${added} · อัปเดต ${updated} · ยกเลิก ${cancelled} รายการ`
+      : 'ข้อมูลตรงกับ Booking.com แล้ว';
+  }, [sheetsUrl]);
+
+  // Auto-import once the sheet has loaded, then every 30 minutes.
+  const sheetLoaded = sync.status === 'saved' || sync.status === 'saving';
+  const hasIcal = rooms.some((r) => r.icalUrl);
+  useEffect(() => {
+    if (!sheetLoaded || !hasIcal) return;
+    const run = () => runIcalImport().then((msg) => { if (msg.startsWith('เพิ่ม')) showToast(`Booking.com: ${msg}`); });
+    run();
+    const id = window.setInterval(run, 30 * 60_000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetLoaded, hasIcal, runIcalImport]);
 
   // Local copy (unless cloud-only mode).
   useEffect(() => {
@@ -136,7 +202,7 @@ export const App: React.FC = () => {
   // Extract available months from dataset
   const availableMonths = useMemo(() => {
     const monthsSet = new Set<string>();
-    monthsSet.add(new Date().toISOString().slice(0, 7));
+    monthsSet.add(localDate().slice(0, 7));
     bookings.forEach((b) => {
       if (b.checkInDate && b.checkInDate.length >= 7) {
         monthsSet.add(b.checkInDate.slice(0, 7));
@@ -168,6 +234,14 @@ export const App: React.FC = () => {
         if (filterOptions.channel !== 'all' && b.bookingChannel !== filterOptions.channel) return false;
         if (filterOptions.bedType !== 'all' && b.bedType !== filterOptions.bedType) return false;
         if (filterOptions.status !== 'all' && b.status !== filterOptions.status) return false;
+        if (filterOptions.roomId && b.roomId !== filterOptions.roomId) return false;
+        if (filterOptions.unpaidOnly && !(b.status !== 'cancelled' && b.paymentStatus && b.paymentStatus !== 'paid' && balanceDue(b) > 0)) return false;
+        if (filterOptions.startDate || filterOptions.endDate) {
+          const d = filterOptions.dateField === 'checkOut' ? b.checkOutDate : b.checkInDate;
+          if (filterOptions.startDate && d < filterOptions.startDate) return false;
+          if (filterOptions.endDate && d > filterOptions.endDate) return false;
+          if (b.status === 'cancelled') return false;
+        }
         return true;
       })
       .sort((a, b) => {
@@ -183,7 +257,7 @@ export const App: React.FC = () => {
 
   // Monthly Stats calculation
   const stats: BookingStats = useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = localDate();
     let totalRevenue = 0, bookingComCount = 0, walkInCount = 0, bigBedCount = 0, smallBedCount = 0, todayCheckIns = 0, todayCheckOuts = 0;
     monthlyBookings.forEach((b) => {
       if (b.status !== 'cancelled') totalRevenue += b.price;
@@ -192,11 +266,13 @@ export const App: React.FC = () => {
       if (b.bedType === 'big')   bigBedCount++;
       if (b.bedType === 'small') smallBedCount++;
       if (b.bedType === 'both') { bigBedCount++; smallBedCount++; }
-      if (b.checkInDate === todayStr)  todayCheckIns++;
-      if (b.checkOutDate === todayStr) todayCheckOuts++;
+      if (b.status !== 'cancelled' && b.checkInDate === todayStr)  todayCheckIns++;
+      if (b.status !== 'cancelled' && b.checkOutDate === todayStr) todayCheckOuts++;
     });
     return { totalBookings: monthlyBookings.length, totalRevenue, bookingComCount, walkInCount, bigBedCount, smallBedCount, todayCheckIns, todayCheckOuts };
   }, [monthlyBookings]);
+
+  const unpaidCount = useMemo(() => unpaidBookings(bookings).length, [bookings]);
 
   // Handlers
   const handleSaveBooking = (bookingToSave: BookingRecord) => {
@@ -230,27 +306,18 @@ export const App: React.FC = () => {
   };
 
   const handleTodayFilter = (type: 'check_in' | 'check_out') => {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = localDate();
     changeView('table');
-    if (type === 'check_in') {
-      setFilterOptions((prev) => ({
-        ...prev,
-        startDate: todayStr,
-        endDate: todayStr,
-        status: 'confirmed',
-        searchQuery: '',
-      }));
-      showToast('แสดงเฉพาะรายการที่ต้อง Check-in วันนี้');
-    } else {
-      setFilterOptions((prev) => ({
-        ...prev,
-        startDate: todayStr,
-        endDate: todayStr,
-        status: 'checked_in',
-        searchQuery: '',
-      }));
-      showToast('แสดงเฉพาะรายการที่ต้อง Check-out วันนี้');
-    }
+    setSelectedMonth(todayStr.slice(0, 7));
+    setFilterOptions((prev) => ({
+      ...prev,
+      startDate: todayStr,
+      endDate: todayStr,
+      dateField: type === 'check_in' ? 'checkIn' : 'checkOut',
+      status: 'all',
+      searchQuery: '',
+    }));
+    showToast(type === 'check_in' ? 'แสดงเฉพาะรายการที่เช็คอินวันนี้' : 'แสดงเฉพาะรายการที่เช็คเอาท์วันนี้');
   };
 
   const handleDeleteBooking = (id: string) => {
@@ -317,17 +384,21 @@ export const App: React.FC = () => {
     showToast('บันทึกข้อมูลใบกำกับภาษีเรียบร้อย');
   };
 
-  const handleAddBookingForDate = (dateStr: string) => {
+  const handleUpdateBooking = (updated: BookingRecord) =>
+    setBookings((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+
+  const handleAddBookingForDate = (dateStr: string, room = rooms.find((r) => r.id === filterOptions.roomId)) => {
     setEditingBooking({
+      roomId: room?.id,
       id: `MEM-${Date.now().toString().slice(-6)}`,
       createdAt: dateStr,
       customerName: '',
       phoneNumber: '',
-      bedType: 'big',
+      bedType: room?.bedType ?? 'big',
       bookingChannel: 'booking_com',
       checkInDate: dateStr,
       checkInTime: '14:00',
-      checkOutDate: dateStr,
+      checkOutDate: localDate(new Date(new Date(dateStr + 'T00:00:00').getTime() + 86_400_000)),
       checkOutTime: '12:00',
       price: 1500,
       status: 'confirmed',
@@ -361,6 +432,8 @@ export const App: React.FC = () => {
         onOpenAddModal={openAddModal}
         onOpenExportModal={() => setIsExportModalOpen(true)}
         onOpenSheetsModal={() => setIsSheetsModalOpen(true)}
+        onOpenRooms={() => setIsRoomsOpen(true)}
+        onInstall={installEvt ? handleInstall : undefined}
         hasSheetsUrl={Boolean(sheetsUrl)}
         syncStatus={sync.status}
         onRetrySync={sync.retry}
@@ -379,7 +452,32 @@ export const App: React.FC = () => {
           onTodayCheckOutClick={() => handleTodayFilter('check_out')}
         />
 
-        <div key={currentView} className="animate-rise">
+        <div key={currentView} className="animate-rise space-y-4">
+        {/* Room filter (list & calendar) */}
+        {rooms.length > 1 && currentView === 'table' && (
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0">
+            {[{ id: '', name: lang === 'th' ? 'ทุกห้อง' : 'All rooms' }, ...rooms].map((r) => (
+              <button key={r.id || 'all'} className="chip shrink-0" aria-pressed={(filterOptions.roomId || '') === r.id}
+                onClick={() => setFilterOptions((prev) => ({ ...prev, roomId: r.id || undefined }))}>
+                {r.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {currentView === 'today' && (
+          <TodayView
+            bookings={bookings}
+            rooms={rooms}
+            lang={lang}
+            t={t}
+            onEdit={(b) => { setEditingBooking(b); setIsAddModalOpen(true); }}
+            onQuickUpdateStatus={handleQuickUpdateStatus}
+            onUpdate={handleUpdateBooking}
+            onAddForRoom={(room) => handleAddBookingForDate(localDate(), room)}
+          />
+        )}
+
         {/* ── CONDITIONAL VIEW RENDER ── */}
         {currentView === 'table' && (
           <div className="space-y-4">
@@ -393,6 +491,7 @@ export const App: React.FC = () => {
               onPrintReceipt={handlePrintReceipt}
               onPrintTaxInvoice={handlePrintTaxInvoice}
               onResetFilters={handleResetFilters}
+              rooms={rooms}
               selectedMonth={selectedMonth}
               onMonthChange={setSelectedMonth}
               availableMonths={availableMonths}
@@ -405,11 +504,12 @@ export const App: React.FC = () => {
         {currentView === 'calendar' && (
           <CalendarView
             bookings={bookings}
+            rooms={rooms}
             selectedMonth={selectedMonth}
             onMonthChange={setSelectedMonth}
             availableMonths={availableMonths}
             onEditBooking={(b) => { setEditingBooking(b); setIsAddModalOpen(true); }}
-            onAddBookingForDate={handleAddBookingForDate}
+            onAddBookingForDate={(d, room) => handleAddBookingForDate(d, room)}
             lang={lang}
             t={t}
           />
@@ -418,6 +518,7 @@ export const App: React.FC = () => {
         {currentView === 'analytics' && (
           <AnalyticsView
             bookings={bookings}
+            rooms={rooms}
             selectedMonth={selectedMonth}
             onMonthChange={setSelectedMonth}
             availableMonths={availableMonths}
@@ -452,9 +553,17 @@ export const App: React.FC = () => {
         onChange={changeView}
         onAdd={openAddModal}
         addLabel={t.fabTooltip}
-        onOpenSheets={() => setIsSheetsModalOpen(true)}
+        badge={{ today: unpaidCount }}
+      />
+
+      <RoomsModal
+        isOpen={isRoomsOpen}
+        onClose={() => setIsRoomsOpen(false)}
+        settings={settings}
+        onSave={saveSettings}
+        bookings={bookings}
+        onImportIcal={runIcalImport}
         hasSheetsUrl={Boolean(sheetsUrl)}
-        syncStatus={sync.status}
       />
 
       {/* ── Modals ── */}
@@ -464,6 +573,8 @@ export const App: React.FC = () => {
         onSave={handleSaveBooking}
         onPrintReceipt={handlePrintReceipt}
         initialData={editingBooking}
+        allBookings={bookings}
+        rooms={rooms}
         t={t}
       />
 

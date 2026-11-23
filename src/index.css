@@ -143,7 +143,6 @@ html, :root { color-scheme: light !important; }
 .badge-booking, .badge-walkin, .badge-bed-big, .badge-bed-small, .badge-bed-both {
   background: transparent; color: var(--text-secondary); padding: 0; border-radius: 0;
 }
-.badge-checked_in .badge-dot { animation: pulseDot 2s ease-in-out infinite; }
 
 /* ============================================================
    CHIPS & SEGMENTED
@@ -282,9 +281,9 @@ html, :root { color-scheme: light !important; }
 .action-btn-delete:hover { background: var(--red-bg); color: var(--red); }
 
 /* Collapsible (animates height via grid rows) */
-.collapse { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--dur-slow) var(--ease-out); }
-.collapse > * { overflow: hidden; }
-.collapse.open { grid-template-rows: 1fr; }
+.reveal { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--dur-slow) var(--ease-out); }
+.reveal > * { overflow: hidden; }
+.reveal.open { grid-template-rows: 1fr; }
 
 /* Status edge for cards */
 .card-confirmed   { border-left-color: var(--amber); }
@@ -418,3 +417,17 @@ input[type=number].doc-field::-webkit-outer-spin-button { -webkit-appearance: no
   .doc-print-only { display: inline !important; }
   .doc-field { padding: 0 !important; margin: 0 !important; background: transparent !important; box-shadow: none !important; }
 }
+
+/* Calendar timeline */
+.cal-cell { border: 0; background: transparent; transition: background var(--dur-fast); }
+.cal-cell:hover { background: var(--brand-light) !important; }
+.cal-bar { border: 0; transform-origin: left center; animation: barIn var(--dur-slow) var(--ease-out) both; transition: filter var(--dur-fast), transform var(--dur-fast); }
+.cal-bar:hover { filter: brightness(0.96); }
+.cal-bar:active { transform: scale(0.98); }
+@keyframes barIn { from { opacity: 0; transform: scaleX(0.6); } to { opacity: 1; transform: none; } }
+
+/* Charts */
+.chart-bar { display: block; transform-origin: bottom; animation: growY 600ms var(--ease-out) both; transition: height 400ms var(--ease-out); }
+.chart-hbar { display: block; transform-origin: left; animation: growX 700ms var(--ease-out) both; transition: width 400ms var(--ease-out); }
+@keyframes growY { from { transform: scaleY(0); } to { transform: none; } }
+@keyframes growX { from { transform: scaleX(0); } to { transform: none; } }

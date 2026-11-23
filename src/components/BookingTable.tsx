@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { BookingRecord, BookingFilterOptions } from '../types/booking';
+import type { BookingRecord, BookingFilterOptions, Room } from '../types/booking';
 import { BookingCard } from './BookingCard';
 import { MonthSelector } from './MonthSelector';
 import type { Language } from '../utils/translations';
@@ -8,6 +8,7 @@ import {
   Pencil, Trash2, X, Printer, FileText, SlidersHorizontal, LogIn, LogOut, Inbox,
 } from 'lucide-react';
 import { formatDateThai, cleanTimeStr } from '../utils/formatters';
+import { PAYMENT_STATUS_LABEL, balanceDue } from '../utils/bookingRules';
 
 interface BookingTableProps {
   bookings: BookingRecord[];
@@ -19,6 +20,7 @@ interface BookingTableProps {
   onPrintReceipt?: (booking: BookingRecord) => void;
   onPrintTaxInvoice?: (booking: BookingRecord) => void;
   onResetFilters: () => void;
+  rooms?: Room[];
   selectedMonth: string;
   onMonthChange: (month: string) => void;
   availableMonths: string[];
@@ -57,9 +59,19 @@ export const QuickStatusButton: React.FC<{ booking: BookingRecord; onQuickUpdate
   return null;
 };
 
-export const RoomLabel: React.FC<{ booking: BookingRecord; t: any }> = ({ booking, t }) => {
+export const PaymentTag: React.FC<{ booking: BookingRecord }> = ({ booking: b }) => {
+  if (!b.paymentStatus || b.status === 'cancelled') return null;
+  const tone = b.paymentStatus === 'paid' ? '#1d6a49' : b.paymentStatus === 'deposit' ? '#8a5a10' : '#9a3026';
+  const text = b.paymentStatus === 'deposit'
+    ? `มัดจำ · ค้าง ฿${balanceDue(b).toLocaleString()}`
+    : PAYMENT_STATUS_LABEL[b.paymentStatus];
+  return <span className="text-xs whitespace-nowrap" style={{ color: tone }}>{text}</span>;
+};
+
+export const RoomLabel: React.FC<{ booking: BookingRecord; t: any; rooms?: Room[] }> = ({ booking, t, rooms = [] }) => {
   const Bed = booking.bedType === 'small' ? BedSingle : BedDouble;
-  const bed = booking.bedType === 'big' ? t.bedBig : booking.bedType === 'small' ? t.bedSmall : t.bedBoth;
+  const bed = rooms.find((r) => r.id === booking.roomId)?.name
+    ?? (booking.bedType === 'big' ? t.bedBig : booking.bedType === 'small' ? t.bedSmall : t.bedBoth);
   const Ch = booking.bookingChannel === 'booking_com' ? Globe : Footprints;
   return (
     <span className="inline-flex items-center gap-3 text-[13px] whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
@@ -84,7 +96,7 @@ const EmptyState: React.FC<{ t: any; onReset?: () => void; filtered: boolean }> 
 
 export const BookingTable: React.FC<BookingTableProps> = ({
   bookings, filterOptions, onFilterChange, onEdit, onDelete, onQuickUpdateStatus,
-  onPrintReceipt, onPrintTaxInvoice, onResetFilters,
+  onPrintReceipt, onPrintTaxInvoice, onResetFilters, rooms = [],
   selectedMonth, onMonthChange, availableMonths, lang, t,
 }) => {
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -92,7 +104,7 @@ export const BookingTable: React.FC<BookingTableProps> = ({
   const extraFilters = (filterOptions.channel !== 'all' ? 1 : 0) + (filterOptions.bedType !== 'all' ? 1 : 0);
   const hasActiveFilters =
     filterOptions.searchQuery.trim() !== '' || extraFilters > 0 || filterOptions.status !== 'all' ||
-    filterOptions.startDate !== '' || filterOptions.endDate !== '';
+    filterOptions.startDate !== '' || filterOptions.endDate !== '' || !!filterOptions.unpaidOnly || !!filterOptions.roomId;
 
   const statusChips = [
     { key: 'all',         label: t.quickStatusAll || 'ทั้งหมด' },
@@ -190,6 +202,23 @@ export const BookingTable: React.FC<BookingTableProps> = ({
             {chip.label}
           </button>
         ))}
+        <button
+          onClick={() => onFilterChange({ unpaidOnly: !filterOptions.unpaidOnly })}
+          aria-pressed={!!filterOptions.unpaidOnly}
+          className="chip shrink-0"
+        >
+          ค้างชำระ
+        </button>
+        {(filterOptions.startDate || filterOptions.endDate) && (
+          <button
+            onClick={() => onFilterChange({ startDate: '', endDate: '', dateField: undefined })}
+            aria-pressed
+            className="chip shrink-0 animate-fade-in"
+          >
+            {filterOptions.dateField === 'checkOut' ? 'เช็คเอาท์' : 'เช็คอิน'} {formatDateThai(filterOptions.startDate)}
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
         {hasActiveFilters && (
           <button
             id="reset-filter-btn"
@@ -206,7 +235,7 @@ export const BookingTable: React.FC<BookingTableProps> = ({
       </div>
 
       {/* Advanced filters (animated) */}
-      <div className={`collapse ${filtersOpen ? 'open' : ''}`}>
+      <div className={`reveal ${filtersOpen ? 'open' : ''}`}>
         <div>
           <div className="card p-4 sm:p-5 grid gap-5 sm:grid-cols-3">
             {chipGroup(t.filterLabel, filterOptions.channel, 'channel', [
@@ -238,7 +267,7 @@ export const BookingTable: React.FC<BookingTableProps> = ({
                 key={b.id} booking={b} onEdit={onEdit} onDelete={onDelete}
                 onQuickUpdateStatus={onQuickUpdateStatus}
                 onPrintReceipt={onPrintReceipt} onPrintTaxInvoice={onPrintTaxInvoice}
-                t={t} lang={lang} index={i}
+                t={t} lang={lang} index={i} rooms={rooms}
               />
             ))}
           </div>
@@ -282,9 +311,10 @@ export const BookingTable: React.FC<BookingTableProps> = ({
                       {cleanTimeStr(b.checkInTime)} – {cleanTimeStr(b.checkOutTime)}
                     </div>
                   </td>
-                  <td className="py-3.5 px-3"><RoomLabel booking={b} t={t} /></td>
-                  <td className="py-3.5 px-3 text-right whitespace-nowrap font-semibold tabular" style={{ color: 'var(--text-primary)' }}>
-                    ฿{b.price.toLocaleString()}
+                  <td className="py-3.5 px-3"><RoomLabel booking={b} t={t} rooms={rooms} /></td>
+                  <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                    <div className="font-semibold tabular" style={{ color: 'var(--text-primary)' }}>฿{b.price.toLocaleString()}</div>
+                    <PaymentTag booking={b} />
                   </td>
                   <td className="py-3.5 px-3 whitespace-nowrap">
                     <div className="flex items-center gap-2">

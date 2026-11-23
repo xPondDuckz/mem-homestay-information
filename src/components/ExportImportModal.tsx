@@ -1,3 +1,4 @@
+import { localDate } from '../utils/formatters';
 import React from 'react';
 import type { BookingRecord } from '../types/booking';
 import { exportBookingsToCSV } from '../utils/csvExport';
@@ -24,7 +25,7 @@ export const ExportImportModal: React.FC<ExportImportModalProps> = ({
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(bookings, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `mem-homestay-backup-${new Date().toISOString().split('T')[0]}.json`);
+    downloadAnchor.setAttribute("download", `mem-homestay-backup-${localDate()}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
